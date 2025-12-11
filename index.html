@@ -20,20 +20,84 @@
     </header>
 
     <main class="app-main">
-      <section class="hero-card">
-        <h2>Hello, Vegas.</h2>
-        <p>
-          This is your base shell. Later threads will plug in live stats,
-          props, and dashboards.
-        </p>
-        <div class="placeholder-pill">
-          Thread 1 · UI Foundation
-        </div>
-      </section>
+      <div class="layout-grid">
+        <!-- LEFT: NAV / SECTIONS -->
+        <aside class="sidebar sidebar-left">
+          <div class="sidebar-group">
+            <div class="sidebar-label">Navigation</div>
+            <button class="nav-item nav-item-active">Overview</button>
+            <button class="nav-item">Today&apos;s Games</button>
+            <button class="nav-item">Players &amp; Props</button>
+            <button class="nav-item">Trends &amp; Tools</button>
+          </div>
+
+          <div class="sidebar-group">
+            <div class="sidebar-label">Future Modules</div>
+            <div class="sidebar-chip-row">
+              <span class="sidebar-chip">BDL Sync</span>
+              <span class="sidebar-chip">Matchups</span>
+              <span class="sidebar-chip">Alerts</span>
+            </div>
+          </div>
+        </aside>
+
+        <!-- CENTER: MAIN PANEL -->
+        <section class="layout-center">
+          <section class="hero-card">
+            <h2>Hello, Vegas.</h2>
+            <p>
+              This is your base PropsParlor shell. Future threads will plug in
+              live NBA data, prop lines, matchup tools, and auto-built slips.
+            </p>
+            <p class="hero-subcopy">
+              For now, this is a static layout: left navigation, central
+              dashboard, and a right-side pick slip area.
+            </p>
+            <div class="placeholder-pill">
+              Thread 1 · UI Foundation Only
+            </div>
+          </section>
+
+          <section class="panel panel-future">
+            <div class="panel-header">
+              <span class="panel-title">Dashboard Placeholder</span>
+              <span class="panel-tag">Static · No Data Yet</span>
+            </div>
+            <p class="panel-text">
+              This area will host your core views: overview, game slates,
+              player search, and prop breakdowns. In future threads, we&apos;ll
+              wire this to Cloudflare Workers and BDL.
+            </p>
+          </section>
+        </section>
+
+        <!-- RIGHT: PICK SLIP SHELL -->
+        <aside class="sidebar sidebar-right">
+          <div class="panel slip-panel">
+            <div class="panel-header">
+              <span class="panel-title">Pick Slip</span>
+              <span class="panel-tag panel-tag-soft">Coming Soon</span>
+            </div>
+            <p class="panel-text">
+              This will be your slip builder: selected props, odds, and
+              parlay summary before sending to your sportsbook.
+            </p>
+            <ul class="slip-list">
+              <li class="slip-placeholder-row">
+                <span class="slip-placeholder-label">No picks added</span>
+                <span class="slip-placeholder-sub">Future: click a prop to send it here.</span>
+              </li>
+            </ul>
+            <button class="slip-button" disabled>
+              Build Parlay (Disabled · Thread 1)
+            </button>
+          </div>
+        </aside>
+      </div>
     </main>
 
     <footer class="app-footer">
-      <span>PropsParlor · Powered by Cloudflare Pages</span>
+      <span>PropsParlor · UI Shell Only · Powered by Cloudflare Pages</span>
     </footer>
   </div>
 </body>
