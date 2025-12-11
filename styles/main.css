@@ -282,6 +282,61 @@ body {
   opacity: 0.9;
 }
 
+/* Status strip */
+.panel-status {
+  padding-top: 12px;
+  padding-bottom: 10px;
+}
+
+.status-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.status-item {
+  display: grid;
+  grid-template-columns: minmax(0, 140px) auto;
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  row-gap: 2px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: radial-gradient(circle at left, rgba(15, 24, 60, 0.85), rgba(4, 4, 16, 0.95));
+}
+
+.status-label {
+  font-size: 0.78rem;
+  opacity: 0.9;
+}
+
+.status-pill {
+  justify-self: flex-start;
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.status-pill-online {
+  border-color: rgba(0, 255, 180, 0.9);
+  background: rgba(0, 40, 30, 0.95);
+  box-shadow: 0 0 12px rgba(0, 255, 180, 0.4);
+}
+
+.status-pill-pending {
+  border-color: rgba(255, 215, 0, 0.85);
+  background: rgba(35, 30, 5, 0.9);
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.35);
+}
+
+.status-note {
+  grid-column: 1 / -1;
+  font-size: 0.7rem;
+  opacity: 0.8;
+}
+
 /* Pick slip panel */
 .slip-panel {
   height: 100%;
@@ -357,5 +412,9 @@ body {
 
   .app-header {
     border-radius: 18px;
+  }
+
+  .status-item {
+    grid-template-columns: 1fr;
   }
 }
