@@ -1,188 +1,152 @@
-// propsparlor-app/scripts/games-today-ui.js
-// Today's Games UI renderer.
-// Fixes the regression where Tipoff showed TWO timestamps and CTA buttons rendered white/default.
+// scripts/games-today-ui.js
+// Wires the "Today's Games" view to /api/stats/games-today without touching layout.
 
 (function () {
-  const ENDPOINT = "/api/stats/games-today";
+  // Use the existing Worker route: /api/stats/games-today
+  const GAMES_TODAY_URL = "/api/stats/games-today";
 
-  function $(id) {
+  async function fetchGamesToday() {
+    const res = await fetch(GAMES_TODAY_URL, {
+      headers: { Accept: "application/json" },
+    });
+
+    if (!res.ok) {
+      throw new Error(`API ${res.status}`);
+    }
+
+    const data = await res.json();
+
+    // Try to be flexible about the worker response shape.
+    let games = [];
+    if (Array.isArray(data.games)) {
+      games = data.games;
+    } else if (Array.isArray(data.data)) {
+      games = data.data;
+    } else if (Array.isArray(data.results)) {
+      games = data.results;
+    }
+
+    if (!data.ok && !games.length) {
+      const message =
+        (data.error && (data.error.message || data.error.code)) ||
+        "Unknown API error";
+      throw new Error(message);
+    }
+
+    return games;
+  }
+
+  function getEl(id) {
     return document.getElementById(id);
   }
 
-  function show(el, yes) {
-    if (!el) return;
-    el.style.display = yes ? "" : "none";
-  }
+  function formatTipoff(dateStr) {
+    if (!dateStr) return "TBD";
+    const d = new Date(dateStr);
+    if (Number.isNaN(d.getTime())) return "TBD";
 
-  function isLikelyISODateString(value) {
-    if (!value) return false;
-    const s = String(value).trim();
-    // quick heuristic: ISO-looking with 'T' and 'Z'
-    return s.includes("T") && s.endsWith("Z") && s.length >= 16;
-  }
-
-  function matchupLabel(game) {
-    const away =
-      (game?.visitor_team?.abbreviation ||
-        game?.away_team?.abbreviation ||
-        game?.away_team_abbr ||
-        "AWY").toString().toUpperCase();
-
-    const home =
-      (game?.home_team?.abbreviation ||
-        game?.home_team_abbr ||
-        "HME").toString().toUpperCase();
-
-    return `${away} @ ${home}`;
-  }
-
-  function pickFirstDate(game) {
-    // Choose ONE best date/time field only (no concatenation).
-    const candidates = [
-      game?.start_time,
-      game?.startTime,
-      game?.scheduled,
-      game?.date,
-      game?.tipoff,
-      game?.tipoff_time,
-    ];
-
-    for (const c of candidates) {
-      if (!c) continue;
-      const d = new Date(c);
-      if (!Number.isNaN(d.getTime())) return d;
-    }
-
-    return null;
-  }
-
-  function formatTipoff(game) {
-    const d = pickFirstDate(game);
-    if (!d) return "TBD";
-
-    // Clean, readable local time (prevents ugly ISO strings)
-    return d.toLocaleString(undefined, {
-      month: "short",
-      day: "2-digit",
+    return d.toLocaleTimeString("en-US", {
       hour: "numeric",
       minute: "2-digit",
     });
   }
 
+  function formatMatchup(game) {
+    const home =
+      game.home_team?.abbreviation ||
+      game.home_team?.name ||
+      game.home_team?.full_name ||
+      "HOME";
+    const away =
+      game.visitor_team?.abbreviation ||
+      game.visitor_team?.name ||
+      game.visitor_team?.full_name ||
+      "AWAY";
+
+    return `${away} @ ${home}`;
+  }
+
   function formatStatus(game) {
-    // Prefer true status fields if present
-    const candidates = [game?.status, game?.game_status, game?.state];
+    if (game.status && typeof game.status === "string") {
+      return game.status;
+    }
+    return "Scheduled";
+  }
 
-    for (const c of candidates) {
-      if (!c) continue;
-      const s = String(c).trim();
-      if (!s) continue;
+  function showState({ loading, error, empty, hasData }) {
+    const loadingEl = getEl("games-today-loading");
+    const errorEl = getEl("games-today-error");
+    const emptyEl = getEl("games-today-empty");
+    const wrapperEl = getEl("games-today-wrapper");
 
-      // If backend accidentally put a date into status, treat as TBD
-      if (isLikelyISODateString(s)) return "TBD";
+    if (!loadingEl || !errorEl || !emptyEl || !wrapperEl) return;
 
-      return s;
+    loadingEl.style.display = loading ? "" : "none";
+    errorEl.style.display = error ? "" : "none";
+    emptyEl.style.display = empty ? "" : "none";
+    wrapperEl.style.display = hasData ? "" : "none";
+  }
+
+  function renderGames(games) {
+    const tbody = getEl("games-today-body");
+    if (!tbody) return;
+
+    if (!games.length) {
+      tbody.innerHTML = "";
+      showState({ loading: false, error: false, empty: true, hasData: false });
+      return;
     }
 
-    return "TBD";
-  }
+    const rows = games
+      .map((game) => {
+        const matchup = formatMatchup(game);
+        const tipoff = formatTipoff(game.date || game.tipoff || game.time);
+        const status = formatStatus(game);
 
-  function buildCTA(matchup) {
-    const btn = document.createElement("button");
-    btn.type = "button";
+        return `
+          <tr>
+            <td>${matchup}</td>
+            <td>${tipoff}</td>
+            <td>${status}</td>
+            <td style="text-align: right;">
+              <button type="button" class="games-table-cta">
+                View props / stats
+              </button>
+            </td>
+          </tr>
+        `;
+      })
+      .join("");
 
-    // CRITICAL: ensures neon styling (prevents white/default button)
-    btn.className = "games-table-cta";
-
-    btn.textContent = "Players & Stats";
-
-    btn.addEventListener("click", () => {
-      try {
-        localStorage.setItem("pp:selectedGame", matchup);
-      } catch (_) {}
-
-      if (window.PropsParlor && typeof window.PropsParlor.openPlayersForGame === "function") {
-        window.PropsParlor.openPlayersForGame(matchup);
-      }
-    });
-
-    return btn;
-  }
-
-  function buildRow(game) {
-    const tr = document.createElement("tr");
-
-    const matchup = matchupLabel(game);
-    const tipoff = formatTipoff(game);
-    const status = formatStatus(game);
-
-    const tdMatchup = document.createElement("td");
-    tdMatchup.textContent = matchup;
-
-    const tdTipoff = document.createElement("td");
-    // FIX: tipoff is ONE formatted value only (no concatenation)
-    tdTipoff.textContent = tipoff;
-
-    const tdStatus = document.createElement("td");
-    tdStatus.textContent = status;
-
-    const tdCTA = document.createElement("td");
-    tdCTA.style.textAlign = "right";
-    tdCTA.appendChild(buildCTA(matchup));
-
-    tr.appendChild(tdMatchup);
-    tr.appendChild(tdTipoff);
-    tr.appendChild(tdStatus);
-    tr.appendChild(tdCTA);
-
-    return tr;
+    tbody.innerHTML = rows;
+    showState({ loading: false, error: false, empty: false, hasData: true });
   }
 
   async function loadGamesToday() {
-    const loading = $("games-today-loading");
-    const error = $("games-today-error");
-    const empty = $("games-today-empty");
-    const wrapper = $("games-today-wrapper");
-    const body = $("games-today-body");
-
-    show(loading, true);
-    show(error, false);
-    show(empty, false);
-    show(wrapper, false);
-
-    if (body) body.innerHTML = "";
+    // Initial state: loading
+    showState({ loading: true, error: false, empty: false, hasData: false });
 
     try {
-      const res = await fetch(ENDPOINT, { headers: { Accept: "application/json" } });
-      const json = await res.json().catch(() => null);
-
-      if (!res.ok || !json || json.ok === false) {
-        console.error("games-today error", res.status, json);
-        show(loading, false);
-        show(error, true);
-        return;
-      }
-
-      const games = json.data?.games || json.games || json.data || [];
-      if (!Array.isArray(games) || games.length === 0) {
-        show(loading, false);
-        show(empty, true);
-        return;
-      }
-
-      games.forEach((g) => {
-        if (!body) return;
-        body.appendChild(buildRow(g));
-      });
-
-      show(loading, false);
-      show(wrapper, true);
-    } catch (e) {
-      console.error("Failed to load games today", e);
-      show(loading, false);
-      show(error, true);
+      const games = await fetchGamesToday();
+      renderGames(games);
+    } catch (err) {
+      console.error("Error loading games:", err);
+      showState({ loading: false, error: true, empty: false, hasData: false });
     }
   }
 
-  document.addEventListener("DOMContentLoaded", loadGamesToday);
+  // Called from main.js
+  window.initGamesToday = function initGamesToday() {
+    if (
+      !getEl("games-today-loading") ||
+      !getEl("games-today-error") ||
+      !getEl("games-today-empty") ||
+      !getEl("games-today-wrapper") ||
+      !getEl("games-today-body")
+    ) {
+      return;
+    }
+
+    loadGamesToday();
+  };
 })();
