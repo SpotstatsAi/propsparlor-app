@@ -5,19 +5,16 @@ const BASE_URL = "https://api.balldontlie.io";
 export async function onRequest(context) {
   const { env } = context;
 
-  // 1) Compute today's date in YYYY-MM-DD (Cloudflare runs in UTC)
   const now = new Date();
-  const today = now.toISOString().slice(0, 10); // e.g. "2025-12-11"
+  const today = now.toISOString().slice(0, 10);
 
-  // 2) Build a cache key specific to "games today"
   const cacheKey = `games-today:${today}`;
 
-  // 3) Try KV cache first
+  // KV → try cache first
   try {
     const cached = await env.PROPSPARLOR_BDL_CACHE.get(cacheKey);
 
     if (cached) {
-      // Try to attach cache_source = "kv" for debugging
       try {
         const obj = JSON.parse(cached);
         if (obj && typeof obj === "object") {
@@ -32,7 +29,7 @@ export async function onRequest(context) {
           });
         }
       } catch {
-        // If parsing fails, just return raw cached string
+        // parsing failed, just return raw
       }
 
       return new Response(cached, {
@@ -44,11 +41,10 @@ export async function onRequest(context) {
       });
     }
   } catch (err) {
-    // If KV fails for any reason, just fall through and hit BDL
     console.error("KV get error (games-today):", err);
   }
 
-  // 4) Cache miss → call BDL
+  // KV miss → call BDL
   try {
     const url = new URL("/nba/v1/games", BASE_URL);
     url.searchParams.set("dates[]", today);
@@ -57,7 +53,6 @@ export async function onRequest(context) {
     const response = await fetch(url.toString(), {
       method: "GET",
       headers: {
-        // BDL docs: Authorization: YOUR_API_KEY
         Authorization: env.BDL_API_KEY,
       },
     });
@@ -92,7 +87,6 @@ export async function onRequest(context) {
 
     const json = await response.json();
 
-    // 5) Clean the response into the format your frontend expects
     const cleanedGames = (json.data || []).map((g) => ({
       id: g.id,
       date: g.date,
@@ -117,17 +111,14 @@ export async function onRequest(context) {
 
     const payload = JSON.stringify(payloadObj, null, 2);
 
-    // 6) Save to KV with TTL (e.g., 10 minutes = 600 seconds)
     try {
       await env.PROPSPARLOR_BDL_CACHE.put(cacheKey, payload, {
-        expirationTtl: 600, // 10 minutes
+        expirationTtl: 600,
       });
     } catch (err) {
       console.error("KV put error (games-today):", err);
-      // If KV write fails, we still return the fresh payload
     }
 
-    // 7) Return the fresh payload
     return new Response(payload, {
       status: 200,
       headers: {
