@@ -20,6 +20,7 @@ export async function onRequest(context) {
         query: q,
         players: [],
         meta: null,
+        cache_source: "live", // trivial live (no BDL call)
       },
       null,
       2
@@ -43,6 +44,24 @@ export async function onRequest(context) {
     const cached = await env.PROPSPARLOR_BDL_CACHE.get(cacheKey);
 
     if (cached) {
+      // Attach cache_source = "kv" when serving from KV
+      try {
+        const obj = JSON.parse(cached);
+        if (obj && typeof obj === "object") {
+          obj.cache_source = "kv";
+          const payload = JSON.stringify(obj, null, 2);
+          return new Response(payload, {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+              "Access-Control-Allow-Origin": "*",
+            },
+          });
+        }
+      } catch {
+        // If parsing fails, just return raw cached string
+      }
+
       return new Response(cached, {
         status: 200,
         headers: {
@@ -119,16 +138,15 @@ export async function onRequest(context) {
       team: p.team || null,
     }));
 
-    const payload = JSON.stringify(
-      {
-        ok: true,
-        query: q,
-        players: cleanedPlayers,
-        meta: json.meta || null,
-      },
-      null,
-      2
-    );
+    const payloadObj = {
+      ok: true,
+      query: q,
+      players: cleanedPlayers,
+      meta: json.meta || null,
+      cache_source: "live",
+    };
+
+    const payload = JSON.stringify(payloadObj, null, 2);
 
     // 4) Store in KV with a long TTL (7 days)
     try {
