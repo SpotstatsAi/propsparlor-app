@@ -1,42 +1,48 @@
-// Thread 1: UI shell only – no real data, just nav + view interactivity.
+// scripts/main.js
+// Handles left-nav view switching and kicks off the "Today's Games" loader.
 
-document.addEventListener("DOMContentLoaded", () => {
-  const navItems = document.querySelectorAll(".nav-item");
-  const viewPanels = document.querySelectorAll("[data-view-panel]");
+(function () {
+  function initNav() {
+    const navItems = document.querySelectorAll(".nav-item[data-view]");
+    const views = document.querySelectorAll(".view[data-view-panel]");
 
-  function activateView(viewName) {
-    // Toggle nav active state
-    navItems.forEach((item) => {
-      const itemView = item.getAttribute("data-view");
-      if (itemView === viewName) {
-        item.classList.add("nav-item-active");
-      } else {
-        item.classList.remove("nav-item-active");
-      }
+    if (!navItems.length || !views.length) return;
+
+    function activate(viewName) {
+      navItems.forEach((btn) => {
+        const isActive = btn.getAttribute("data-view") === viewName;
+        btn.classList.toggle("nav-item-active", isActive);
+      });
+
+      views.forEach((panel) => {
+        const isActive = panel.getAttribute("data-view-panel") === viewName;
+        panel.classList.toggle("view-active", isActive);
+      });
+    }
+
+    navItems.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const viewName = btn.getAttribute("data-view");
+        if (!viewName) return;
+        activate(viewName);
+      });
     });
 
-    // Toggle view panels
-    viewPanels.forEach((panel) => {
-      const panelView = panel.getAttribute("data-view-panel");
-      if (panelView === viewName) {
-        panel.classList.add("view-active");
-      } else {
-        panel.classList.remove("view-active");
-      }
-    });
+    // Respect whatever is pre-marked as active, fallback to "overview".
+    const currentActive = document.querySelector(".nav-item.nav-item-active");
+    const initialView =
+      (currentActive && currentActive.getAttribute("data-view")) ||
+      "overview";
+
+    activate(initialView);
   }
 
-  // Attach click handlers
-  navItems.forEach((item) => {
-    item.addEventListener("click", () => {
-      const targetView = item.getAttribute("data-view");
-      if (!targetView) return;
-      activateView(targetView);
-    });
+  document.addEventListener("DOMContentLoaded", () => {
+    initNav();
+
+    // If the games UI helper is present, initialize it once on load.
+    if (typeof window.initGamesToday === "function") {
+      window.initGamesToday();
+    }
   });
-
-  // Initial state
-  activateView("overview");
-
-  console.log("PropsParlor UI shell ready (Thread 1 views wired).");
-});
+})();
