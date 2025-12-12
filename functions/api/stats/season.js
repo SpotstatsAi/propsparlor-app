@@ -42,6 +42,16 @@ export async function onRequest(context) {
   try {
     const cached = await env.PROPSPARLOR_BDL_CACHE.get(cacheKey);
     if (cached) {
+      try {
+        const obj = JSON.parse(cached);
+        if (obj && typeof obj === "object") {
+          obj.cache_source = "kv";
+          const payload = JSON.stringify(obj, null, 2);
+          return jsonResponseRaw(payload, 200);
+        }
+      } catch {
+        // If parsing fails, just return raw cached json
+      }
       return jsonResponseRaw(cached, 200);
     }
   } catch (err) {
@@ -76,6 +86,7 @@ export async function onRequest(context) {
       last5_averages: last5Avgs,
       last10_averages: last10Avgs,
       game_logs: allStats, // full raw logs so frontend can still drill down
+      cache_source: "live",
     };
 
     const payload = JSON.stringify(payloadObj, null, 2);
