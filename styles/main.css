@@ -282,14 +282,9 @@ body {
   position: relative;
   padding: 14px 14px 16px;
   border-radius: 18px;
-  background: linear-gradient(145deg, rgba(10, 10, 32, 0.96), rgba(4, 4j4, 16, 0.97));
+  background: linear-gradient(145deg, rgba(10, 10, 32, 0.96), rgba(4, 4, 16, 0.97));
   border: 1px solid rgba(255, 255, 255, 0.06);
   box-shadow: 0 14px 32px rgba(0, 0, 0, 0.85);
-}
-
-/* NOTE: Fix accidental typo if it ever appears */
-.panel {
-  background: linear-gradient(145deg, rgba(10, 10, 32, 0.96), rgba(4, 4, 16, 0.97));
 }
 
 .panel-future {
@@ -399,7 +394,6 @@ body {
   list-style: none;
   margin-top: 4px;
   margin-bottom: 10px;
-  padding-left: 0;
 }
 
 .slip-placeholder-row {
@@ -426,22 +420,14 @@ body {
   margin-top: auto;
   padding: 8px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(0, 255, 180, 0.8);
-  background: radial-gradient(circle at 0 0, rgba(0, 255, 180, 0.32), rgba(6, 6, 24, 0.98));
-  color: #e5fff8;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: radial-gradient(circle at 0 0, rgba(0, 255, 180, 0.24), rgba(6, 6, 24, 0.96));
+  color: rgba(245, 245, 255, 0.85);
   font-size: 0.82rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   cursor: not-allowed;
-  opacity: 0.8;
-  box-shadow:
-    0 0 14px rgba(0, 255, 180, 0.6),
-    0 0 26px rgba(0, 120, 255, 0.4);
-}
-
-.slip-button:not(:disabled) {
-  cursor: pointer;
-  opacity: 1;
+  opacity: 0.6;
 }
 
 /* Footer */
@@ -503,6 +489,7 @@ body {
   transition: all 0.25s ease;
   white-space: nowrap;
 
+  /* soft glow around the button */
   box-shadow:
     0 0 6px rgba(0, 200, 255, 0.55),
     inset 0 0 8px rgba(0, 180, 255, 0.25);
@@ -533,182 +520,43 @@ body {
     inset 0 0 6px rgba(0, 255, 255, 0.35);
 }
 
-/* -----------------------------------------
-   Players – stat tiles upgraded to “meters”
-   ----------------------------------------- */
-
-.player-stats-grid {
-  margin-top: 10px;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  max-width: 360px;
-}
-
-.player-stat-row {
-  --fill: 0%;
-  position: relative;
-  overflow: hidden;
-
-  padding: 10px 12px;
-  border-radius: 12px;
-
-  background: radial-gradient(circle at left, rgba(18, 26, 68, 0.85), rgba(4, 4, 18, 0.95));
-  border: 1px solid rgba(0, 255, 180, 0.22);
-
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-
-  font-size: 0.82rem;
-  cursor: pointer;
-
-  transition:
-    transform 0.08s ease,
-    border-color 0.15s ease,
-    box-shadow 0.15s ease,
-    background 0.15s ease;
-}
-
-/* Track */
-.player-stat-row::before {
-  content: "";
-  position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: 8px;
-  height: 7px;
-  border-radius: 999px;
-  background: rgba(5, 12, 30, 0.9);
-  opacity: 0.9;
-}
-
-/* Fill */
-.player-stat-row::after {
-  content: "";
-  position: absolute;
-  left: 10px;
-  bottom: 8px;
-  height: 7px;
-  width: var(--fill);
-  border-radius: 999px;
-  background: linear-gradient(90deg, rgba(0, 255, 180, 0.85), rgba(0, 180, 255, 0.9));
-  box-shadow:
-    0 0 8px rgba(0, 255, 180, 0.6),
-    0 0 14px rgba(0, 120, 255, 0.55);
-}
-
-.player-stat-row:hover {
-  transform: translateY(-0.5px);
-  border-color: rgba(0, 255, 180, 0.45);
-  box-shadow:
-    0 0 10px rgba(0, 255, 180, 0.35),
-    0 0 18px rgba(0, 120, 255, 0.28);
-}
-
-.player-stat-row-active {
-  border-color: rgba(0, 255, 180, 0.9);
-  box-shadow:
-    0 0 14px rgba(0, 255, 180, 0.7),
-    0 0 24px rgba(0, 120, 255, 0.55);
-}
-
-.player-stat-label,
-.player-stat-value {
-  position: relative;
-  z-index: 1;
-}
-
-.player-stat-label {
-  opacity: 0.9;
-  letter-spacing: 0.04em;
-}
-
-.player-stat-value {
-  font-weight: 650;
-  font-variant-numeric: tabular-nums;
-}
-
-/* Player pills (key players) */
-.players-list-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
-}
-
-.player-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4px 10px;
-  font-size: 0.78rem;
+/* CTA inside the games table */
+.games-table-cta {
+  appearance: none;
   border-radius: 999px;
   border: 1px solid rgba(59, 214, 255, 0.7);
-  background: radial-gradient(circle at 0 0, rgba(59, 214, 255, 0.35), #15172d 70%);
+  padding: 4px 10px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: radial-gradient(
+    circle at 0 0,
+    rgba(59, 214, 255, 0.35),
+    #15172d 70%
+  );
   color: #e3f4ff;
   cursor: pointer;
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.05),
-    0 0 18px rgba(59, 214, 255, 0.4);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05),
+    0 0 22px rgba(59, 214, 255, 0.4);
   transition:
     background 0.15s ease,
     box-shadow 0.15s ease,
-    transform 0.08s ease,
-    opacity 0.12s ease;
+    transform 0.08s ease;
 }
 
-.player-pill:hover {
+.games-table-cta:hover {
   transform: translateY(-0.5px);
-  background: radial-gradient(circle at 0 0, rgba(59, 214, 255, 0.55), #1b1e3a 70%);
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.1),
-    0 0 26px rgba(59, 214, 255, 0.6);
+  background: radial-gradient(
+    circle at 0 0,
+    rgba(59, 214, 255, 0.55),
+    #1b1e3a 70%
+  );
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1),
+    0 0 30px rgba(59, 214, 255, 0.6);
 }
 
-.player-pill-active {
-  opacity: 1;
-  border-color: rgba(0, 255, 180, 0.9);
-  box-shadow:
-    0 0 0 1px rgba(0, 255, 180, 0.6),
-    0 0 30px rgba(0, 255, 180, 0.7);
-}
-
-/* Slip rows for added picks */
-.slip-row {
-  padding: 8px 10px;
-  border-radius: 12px;
-  background: radial-gradient(circle at top left, rgba(18, 26, 68, 0.8), rgba(4, 4, 18, 0.96));
-  border: 1px solid rgba(0, 255, 180, 0.25);
-  margin-bottom: 6px;
-}
-
-.slip-row-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.8rem;
-}
-
-.slip-row-title {
-  font-weight: 600;
-}
-
-.slip-row-tag {
-  font-size: 0.68rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  padding: 2px 6px;
-  border-radius: 999px;
-  border: 1px solid rgba(0, 255, 180, 0.6);
-  background: rgba(3, 20, 20, 0.9);
-  opacity: 0.9;
-}
-
-.slip-row-sub {
-  margin-top: 2px;
-  font-size: 0.72rem;
-  opacity: 0.85;
+.games-table-cta:active {
+  transform: translateY(0.5px) scale(0.99);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 0 18px rgba(59, 214, 255, 0.35);
 }
