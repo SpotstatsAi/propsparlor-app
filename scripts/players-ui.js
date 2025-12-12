@@ -4,7 +4,7 @@
 // selectable primary stat (PTS / REB / AST / PRA / 3PM).
 //
 // Chart upgrade: pulls /api/stats/gamelog and renders SVG sparklines + a main line chart.
-// Scroll upgrade: scroll sync between spark row + main chart.
+// Scroll upgrade: scroll sync between spark row + main chart (stable, no jitter/freeze).
 
 (function () {
   const SEASON_API_URL = "/api/stats/season";
@@ -23,7 +23,7 @@
   let currentPlayer = null;
   let currentTab = "season";  // "season" | "last10" | "last5"
   let primaryStatKey = "pra"; // "pts" | "reb" | "ast" | "pra" | "fg3m"
-  const statsCache = Object.create(null); // key: `${playerId}:${tab}`
+  const statsCache = Object.create(null);   // key: `${playerId}:${tab}`
   const gamelogCache = Object.create(null); // key: `${playerId}` -> array
 
   function initPlayerViewPlaceholders() {
@@ -31,9 +31,7 @@
 
     if (addSlipBtn && !addSlipBtn.dataset.bound) {
       addSlipBtn.dataset.bound = "true";
-      addSlipBtn.addEventListener("click", () => {
-        handleAddToSlipClick();
-      });
+      addSlipBtn.addEventListener("click", () => handleAddToSlipClick());
       addSlipBtn.disabled = true;
       addSlipBtn.textContent = "Add to Slip (Disabled · No Player)";
     }
@@ -89,9 +87,7 @@
       btn.className = "player-pill player-tab";
       btn.dataset.tabId = tabCfg.id;
       btn.textContent = tabCfg.label;
-
       if (idx === 0) btn.classList.add("player-pill-active");
-
       btn.addEventListener("click", () => onTabClick(tabCfg.id));
       tabs.appendChild(btn);
     });
@@ -145,7 +141,6 @@
     updateStatMeters(statsObj || null);
   }
 
-  // Set meter fill % for each stat row based on max stat in current view
   function updateStatMeters(statsObj) {
     const rows = document.querySelectorAll(".player-stat-row");
     if (!rows.length) return;
@@ -171,7 +166,6 @@
         return;
       }
 
-      // keep a minimum visible fill so it doesn’t look “dead”
       const pct = Math.max(6, Math.min(100, (v / maxVal) * 100));
       row.style.setProperty("--fill", `${pct}%`);
     });
@@ -204,7 +198,6 @@
 
     syncAddSlipButtonDisabled();
 
-    // Re-render main chart for the newly selected stat (if we have a player)
     if (currentPlayer && currentPlayer.bdlId) {
       renderChartsForCurrentPlayer().catch(() => {});
     }
@@ -325,7 +318,6 @@
       applySubtitle(tab, currentPlayer, false);
       syncAddSlipButtonDisabled();
 
-      // Update charts after stats load (charts come from gamelog)
       await renderChartsForCurrentPlayer();
     } catch (err) {
       console.error("Failed to load stats", tab, err);
@@ -572,7 +564,7 @@
     return { sparklines, main };
   }
 
-  // --- Scroll sync (sparks <-> main chart) ---
+  // --- Scroll sync (stable) ---
   function bindChartScrollSync() {
     const sparks = document.getElementById("player-sparklines");
     const main = document.getElementById("player-main-chart");
@@ -581,7 +573,32 @@
     if (sparks.dataset.syncBound === "true") return;
     sparks.dataset.syncBound = "true";
 
-    let locking = false;
+    // Make both areas truly scrollable horizontally
+    sparks.style.overflowX = "auto";
+    sparks.style.overflowY = "hidden";
+    sparks.style.scrollbarGutter = "stable";
+    sparks.style.paddingBottom = "6px";
+
+    // Convert the spark row into a horizontal strip so it can scroll
+    // (index.html started as a grid; this makes scroll-sync meaningful)
+    sparks.style.display = "flex";
+    sparks.style.flexWrap = "nowrap";
+    sparks.style.gap = "8px";
+
+    // Ensure each spark "card" has a fixed width so the row can overflow
+    Array.from(sparks.children || []).forEach((child) => {
+      child.style.minWidth = "180px";
+      child.style.flex = "0 0 auto";
+    });
+
+    // Main chart container should scroll when we render a wider SVG
+    main.style.overflowX = "auto";
+    main.style.overflowY = "hidden";
+    main.style.scrollbarGutter = "stable";
+    main.style.display = "block"; // override the original flex-centering from index.html
+    main.style.padding = "12px";
+
+    let lock = false;
 
     function maxScroll(el) {
       return Math.max(0, (el.scrollWidth || 0) - (el.clientWidth || 0));
@@ -591,18 +608,23 @@
       const fromMax = maxScroll(from);
       const toMax = maxScroll(to);
       if (fromMax <= 0 || toMax <= 0) return;
-
       const pct = from.scrollLeft / fromMax;
       to.scrollLeft = pct * toMax;
+    }
+
+    function unlockNextFrame() {
+      requestAnimationFrame(() => {
+        lock = false;
+      });
     }
 
     sparks.addEventListener(
       "scroll",
       () => {
-        if (locking) return;
-        locking = true;
+        if (lock) return;
+        lock = true;
         sync(sparks, main);
-        locking = false;
+        unlockNextFrame();
       },
       { passive: true }
     );
@@ -610,10 +632,10 @@
     main.addEventListener(
       "scroll",
       () => {
-        if (locking) return;
-        locking = true;
+        if (lock) return;
+        lock = true;
         sync(main, sparks);
-        locking = false;
+        unlockNextFrame();
       },
       { passive: true }
     );
@@ -623,8 +645,6 @@
     const { sparklines, main } = getChartsEls();
 
     if (sparklines) {
-      // Keep existing placeholder boxes in index.html if present.
-      // If empty, show a minimal message.
       if (!sparklines.children || sparklines.children.length === 0) {
         sparklines.innerHTML =
           `<div class="panel-text" style="opacity:.75;">Charts placeholder</div>`;
@@ -632,8 +652,6 @@
     }
 
     if (main) {
-      // If the index.html placeholder is still there, leave it.
-      // If empty, provide a minimal placeholder.
       if (!main.innerHTML || !main.innerHTML.trim()) {
         main.innerHTML =
           `<div class="panel-text" style="opacity:.75;">Select a player to render charts.</div>`;
@@ -661,9 +679,7 @@
   }
 
   function seriesForKey(rows, key) {
-    // Rows are DESC by date from API; chart should go left->right oldest->newest
     const ordered = rows.slice().reverse();
-
     return ordered
       .map((r) => {
         const pts = toNum(r?.pts);
@@ -758,7 +774,6 @@
       )
       .join(" ");
 
-    // Simple rolling average (5-game) overlay
     const roll = rollingAverage(values, Math.min(5, values.length));
     const rollPts = roll.map((v, i) => {
       const x = padL + (i / (roll.length - 1)) * innerW;
@@ -773,7 +788,6 @@
       )
       .join(" ");
 
-    // Grid lines (horizontal)
     const gridLines = 4;
     const grid = Array.from({ length: gridLines + 1 })
       .map((_, i) => {
@@ -788,15 +802,11 @@
     const minLabel = min.toFixed(0);
 
     const dots = pts
-      .map((p) => {
-        return `<circle cx="${p[0].toFixed(2)}" cy="${p[1].toFixed(
-          2
-        )}" r="2.8" fill="rgba(0,255,180,0.85)" />`;
-      })
+      .map((p) => `<circle cx="${p[0].toFixed(2)}" cy="${p[1].toFixed(2)}" r="2.8" fill="rgba(0,255,180,0.85)" />`)
       .join("");
 
     return `
-      <svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" aria-label="trend chart">
+      <svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" aria-label="trend chart">
         ${grid}
         <text x="8" y="${(padT + 10).toFixed(2)}" fill="rgba(255,255,255,0.70)" font-size="10">${maxLabel}</text>
         <text x="8" y="${(padT + innerH).toFixed(2)}" fill="rgba(255,255,255,0.55)" font-size="10">${minLabel}</text>
@@ -825,8 +835,6 @@
   }
 
   function sparkTargets() {
-    // Our index.html uses 5 “status-item” cards as placeholders inside #player-sparklines.
-    // Each card has a label + a second div meant to be filled. We’ll fill that second div.
     const root = document.getElementById("player-sparklines");
     if (!root) return null;
 
@@ -835,7 +843,6 @@
 
     return cards.map((card) => {
       const blocks = card.querySelectorAll("div");
-      // The last div in each card is the “spark container”
       const sparkHost = blocks && blocks.length ? blocks[blocks.length - 1] : null;
       return sparkHost;
     });
@@ -848,18 +855,17 @@
       return;
     }
 
-    const limit = 50; // fetch enough once; then slice by tab for display
+    const limit = 50;
     const rows = await fetchGamelog(currentPlayer.bdlId, limit);
     if (!rows || rows.length < 2) {
-      if (main) main.innerHTML = `<div class="panel-text" style="opacity:.8;">No game log available yet.</div>`;
+      main.innerHTML = `<div class="panel-text" style="opacity:.8;">No game log available yet.</div>`;
       return;
     }
 
     const windowN = windowSizeForTab(currentTab);
-    const sliced = rows.slice(0, Math.max(windowN, 5)); // rows are DESC; slice recent N
-
-    // Sparklines: PTS/REB/AST/PRA/3PM always use last 10 (or available)
+    const sliced = rows.slice(0, Math.max(windowN, 5));
     const sparkRows = rows.slice(0, 12);
+
     const sparkKeys = ["pts", "reb", "ast", "pra", "fg3m"];
     const sparkHosts = sparkTargets();
 
@@ -870,19 +876,18 @@
       });
     }
 
-    // Main chart uses the primary stat + the selected tab window
     const mainVals = seriesForKey(sliced, primaryStatKey);
     const statLabel = statLabelFromKey(primaryStatKey);
     const tabLabel = currentTabLabelShort();
 
-    // Width logic: make SVG wide enough to scroll (so scroll-sync has meaning)
     const rect = main.getBoundingClientRect ? main.getBoundingClientRect() : null;
     const baseW = rect && rect.width ? Math.max(520, Math.floor(rect.width)) : 640;
-    const pointsW = 28 * Math.max(10, mainVals.length); // ~28px per game point
-    const w = Math.max(baseW, pointsW);
+    const pointsW = 28 * Math.max(10, mainVals.length);
+    const svgW = Math.max(baseW, pointsW);
 
+    // Render a wider SVG *inside* the scrollable container
     main.innerHTML = `
-      <div style="min-width:${w}px; width:${w}px;">
+      <div style="width:${svgW}px; min-width:${svgW}px;">
         <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:8px;">
           <div style="font-size:.82rem; letter-spacing:.12em; text-transform:uppercase; opacity:.88;">
             ${statLabel} · ${tabLabel} Trend
@@ -891,14 +896,13 @@
             Rolling avg overlay (v1)
           </div>
         </div>
-        ${buildMainChartSVG(mainVals, { width: w, height: 210 })}
+        ${buildMainChartSVG(mainVals, { width: svgW, height: 210 })}
         <div style="margin-top:8px; font-size:.72rem; opacity:.72; line-height:1.35;">
           Next upgrade: prop-line overlay + hit-rate shading + opponent context.
         </div>
       </div>
     `;
 
-    // Ensure scroll sync is bound (safe/no-op if already bound)
     bindChartScrollSync();
   }
 
