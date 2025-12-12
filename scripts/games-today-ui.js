@@ -2,14 +2,38 @@
 // Wires the "Today's Games" view to /api/stats/games-today.
 
 function normalizeGamesPayload(json) {
-  // Be tolerant of different backend shapes:
-  // - { ok: true, games: [...] }
-  // - { ok: true, data: [...] }
-  // - [ ... ]
   if (Array.isArray(json)) return json;
   if (Array.isArray(json.games)) return json.games;
   if (Array.isArray(json.data)) return json.data;
   return [];
+}
+
+function fmtTipoff(raw) {
+  if (!raw) return "TBD";
+
+  try {
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) return raw;
+
+    return d.toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+  } catch (e) {
+    return raw;
+  }
+}
+
+function extractStatus(game) {
+  // Prefer explicit status fields
+  if (game.status && typeof game.status === "string") return game.status;
+  if (game.game_status && typeof game.game_status === "string") return game.game_status;
+
+  // If finished flag exists
+  if (game.finished === true) return "Final";
+
+  return "Scheduled";
 }
 
 async function loadTodaysGames() {
@@ -19,12 +43,8 @@ async function loadTodaysGames() {
   const wrapperEl = document.getElementById("games-today-wrapper");
   const tbodyEl = document.getElementById("games-today-body");
 
-  // If this view isn't present, do nothing.
-  if (!loadingEl || !errorEl || !emptyEl || !wrapperEl || !tbodyEl) {
-    return;
-  }
+  if (!loadingEl || !errorEl || !emptyEl || !wrapperEl || !tbodyEl) return;
 
-  // Initial state
   loadingEl.style.display = "";
   errorEl.style.display = "none";
   emptyEl.style.display = "none";
@@ -34,14 +54,10 @@ async function loadTodaysGames() {
   try {
     const res = await fetch("/api/stats/games-today", {
       method: "GET",
-      headers: {
-        Accept: "application/json",
-      },
+      headers: { Accept: "application/json" },
     });
 
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
     const json = await res.json();
     const games = normalizeGamesPayload(json);
@@ -72,25 +88,16 @@ async function loadTodaysGames() {
       const matchupTd = document.createElement("td");
       matchupTd.textContent = `${awayAbbr} @ ${homeAbbr}`;
 
-      const tipoff =
-        game.tipoff_local ||
-        game.tipoff ||
-        game.start_time ||
-        game.game_time ||
-        game.date ||
-        "TBD";
-
+      // format tipoff cleanly
+      const rawTip = game.tipoff_local || game.tipoff || game.start_time || game.date;
       const timeTd = document.createElement("td");
-      timeTd.textContent = tipoff;
+      timeTd.textContent = fmtTipoff(rawTip);
 
-      const status =
-        game.status ||
-        game.game_status ||
-        (game.finished ? "Final" : "Scheduled");
-
+      // clean status
       const statusTd = document.createElement("td");
-      statusTd.textContent = status;
+      statusTd.textContent = extractStatus(game);
 
+      // actions
       const actionTd = document.createElement("td");
       actionTd.style.textAlign = "right";
 
@@ -102,7 +109,6 @@ async function loadTodaysGames() {
 
       btn.addEventListener("click", () => {
         console.log("Clicked game", game.id, matchupTd.textContent);
-        // Future thread: open detail/pick UI.
       });
 
       actionTd.appendChild(btn);
@@ -125,6 +131,4 @@ async function loadTodaysGames() {
   }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  loadTodaysGames();
-});
+document.addEventListener("DOMContentLoaded", loadTodaysGames);
