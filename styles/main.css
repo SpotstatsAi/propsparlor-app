@@ -526,7 +526,6 @@ body {
   transition: all 0.25s ease;
   white-space: nowrap;
 
-  /* soft glow around the button */
   box-shadow:
     0 0 6px rgba(0, 200, 255, 0.55),
     inset 0 0 8px rgba(0, 180, 255, 0.25);
@@ -599,10 +598,9 @@ body {
 }
 
 /* -----------------------------------------------------
-   THREAD 7 — PLAYERS VIEW (fix “broken buttons” + pro chart placeholder)
+   THREAD 7 — PLAYERS VIEW
    ----------------------------------------------------- */
 
-/* Make buttons consistently “Vegas” (prevents default white button styles) */
 button {
   font-family: inherit;
 }
@@ -617,14 +615,12 @@ button {
   color: #f5f5ff;
 }
 
-/* Players view header context */
 #players-game-context {
   font-size: 0.85rem;
   opacity: 0.9;
   margin-bottom: 6px;
 }
 
-/* Demo players / roster pills */
 #players-list-intro {
   font-size: 0.78rem;
   opacity: 0.82;
@@ -676,7 +672,6 @@ button {
     0 0 30px rgba(0, 120, 255, 0.18);
 }
 
-/* Player card shell (assumes your HTML has this wrapper already) */
 .player-card-shell {
   margin-top: 10px;
   padding: 14px 14px 16px;
@@ -702,20 +697,17 @@ button {
   margin-bottom: 10px;
 }
 
-/* Tabs inherit pill styling */
 .player-tabs .player-pill {
   padding: 5px 10px;
   font-size: 0.74rem;
 }
 
-/* Stats grid */
 .player-stats-grid {
   display: grid;
   grid-template-columns: 1fr;
   gap: 8px;
 }
 
-/* Row is clickable and has a “meter fill” */
 .player-stat-row {
   position: relative;
   display: grid;
@@ -730,7 +722,6 @@ button {
   overflow: hidden;
 }
 
-/* Meter layer */
 .player-stat-row::before {
   content: "";
   position: absolute;
@@ -742,7 +733,6 @@ button {
   pointer-events: none;
 }
 
-/* Row content above meter */
 .player-stat-row > * {
   position: relative;
   z-index: 1;
@@ -773,7 +763,6 @@ button {
     0 0 26px rgba(0, 255, 180, 0.22);
 }
 
-/* Add-to-slip button (real, not disabled-styled) */
 #player-add-slip {
   width: 100%;
   margin-top: 12px;
@@ -810,164 +799,128 @@ button {
   box-shadow: none;
 }
 
-/* “Outlier-grade” chart card placeholder styles (we’ll wire data next step) */
-.player-chart-card {
-  margin-top: 12px;
-  border-radius: 18px;
-  padding: 12px 12px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: radial-gradient(circle at top left, rgba(18, 26, 68, 0.52), rgba(4, 4, 18, 0.95));
-  box-shadow:
-    0 14px 32px rgba(0, 0, 0, 0.85),
-    0 0 24px rgba(0, 255, 180, 0.08);
-}
-
-.player-chart-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-
-.player-chart-title {
-  font-size: 0.78rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  opacity: 0.92;
-}
-
-.player-chart-meta {
-  font-size: 0.7rem;
-  opacity: 0.75;
-  white-space: nowrap;
-}
-
-.player-chart-canvas {
-  position: relative;
-  height: 180px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background:
-    linear-gradient(180deg, rgba(0, 0, 0, 0.10), rgba(0, 0, 0, 0.35)),
-    radial-gradient(circle at 0 0, rgba(0, 255, 180, 0.08), transparent 60%);
-  overflow: hidden;
-}
-
-/* subtle grid */
-.player-chart-canvas::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
-  background-size: 28px 28px;
-  opacity: 0.18;
-  pointer-events: none;
-}
-
-/* placeholder “neon line” */
-.player-chart-line {
-  position: absolute;
-  inset: 0;
-  opacity: 0.9;
-  pointer-events: none;
-  filter: drop-shadow(0 0 10px rgba(0, 255, 180, 0.25));
-}
-
-.player-chart-footnote {
-  margin-top: 8px;
-  font-size: 0.72rem;
-  opacity: 0.72;
-  line-height: 1.35;
-}
-
 /* -----------------------------------------------------
-   Thread 7 — Charts alignment + spark row layout polish
-   (Safe overrides scoped to the Players charts area)
+   Thread 7 — Charts (NEW SHARED RAIL)
    ----------------------------------------------------- */
 
-/* If your Charts header row uses a wrapper, this locks title + pill alignment */
-.player-charts-header,
-.player-charts-head,
-.charts-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+.panel.charts-shell {
+  margin-top: 12px;
+  padding: 12px 12px 14px;
 }
 
-/* Spark row: force a clean 5-up grid with consistent spacing */
-#player-sparklines {
+.charts-subcopy {
+  margin-bottom: 10px;
+}
+
+/* Single horizontal scroll container (sparks + main chart together) */
+.chart-rail {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 10px;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: radial-gradient(circle at top left, rgba(18, 26, 68, 0.38), rgba(4, 4, 18, 0.92));
+  box-shadow: 0 0 26px rgba(0, 255, 180, 0.08);
+}
+
+/* Make the scroll “feel” premium */
+.chart-rail:focus-within {
+  border-color: rgba(0, 255, 180, 0.22);
+  box-shadow: 0 0 30px rgba(0, 255, 180, 0.12);
+}
+
+.chart-rail-inner {
+  min-width: 760px; /* ensures a real scrollbar on medium widths */
+  padding: 12px;
+}
+
+/* Sparklines strip inside rail */
+.sparks-strip {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(5, 160px);
   gap: 10px;
   align-items: stretch;
-  margin-top: 10px;
+  margin-bottom: 10px;
 }
 
-#player-sparklines > * {
-  min-width: 0; /* prevents overflow pushing other cards out of alignment */
+.spark-card {
+  border-radius: 14px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: radial-gradient(circle at left, rgba(15, 24, 60, 0.75), rgba(4, 4, 16, 0.95));
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.02),
+    0 0 18px rgba(0, 255, 180, 0.06);
 }
 
-/* If the spark cards reuse .status-item, normalize it inside the spark grid only */
-#player-sparklines .status-item {
-  grid-template-columns: 1fr;
-  grid-template-rows: auto auto;
-  row-gap: 6px;
-  align-items: start;
+.spark-card .status-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.76rem;
+  opacity: 0.9;
 }
 
-/* Prevent inline-SVG baseline quirks that cause “slightly off” vertical alignment */
-#player-sparklines svg,
-#player-main-chart svg {
+.spark-host {
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.18);
+}
+
+/* Main chart viewport inside rail */
+.main-chart-viewport {
+  border-radius: 16px;
+  border: 1px solid rgba(0, 255, 180, 0.18);
+  background: radial-gradient(circle at top left, rgba(18, 26, 68, 0.35), rgba(4, 4, 18, 0.92));
+  box-shadow: 0 0 28px rgba(0, 255, 180, 0.10);
+  padding: 12px;
+}
+
+/* Prevent SVG baseline quirks */
+.sparks-strip svg,
+.main-chart-viewport svg {
   display: block;
 }
 
-/* Main chart spacing consistency */
-#player-main-chart {
-  margin-top: 10px;
+/* Placeholder copy styling (if present) */
+.main-chart-placeholder {
+  max-width: 420px;
 }
 
-/* Responsive: keep it clean if the center column gets tighter */
-@media (max-width: 1100px) {
-  #player-sparklines {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+.main-chart-title {
+  font-size: 0.82rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.85;
+  margin-bottom: 6px;
+}
+
+.main-chart-copy {
+  font-size: 0.88rem;
+  line-height: 1.5;
+  opacity: 0.9;
+}
+
+/* Responsive: rail still works, just less minimum width */
+@media (max-width: 900px) {
+  .chart-rail-inner {
+    min-width: 680px;
   }
 }
 
-@media (max-width: 760px) {
-  #player-sparklines {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
+/* -----------------------------------------------------
+   Global scrollbar theming (Vegas / Outlier style)
+   ----------------------------------------------------- */
 
-/* Thread 7 — Charts containment (refined, no text clipping) */
-#player-main-chart {
-  position: relative;
-  overflow-x: hidden;
-  overflow-y: visible;   /* allow footer text to breathe */
-  isolation: isolate;
-}
-
-/* Thread 7 — Main chart must be allowed to grow (override inline height) */
-#player-main-chart {
-  height: auto !important;
-  min-height: 210px;
-
-  display: block !important;   /* stop flex-centering from fighting real chart layout */
-  overflow-x: hidden;
-  overflow-y: visible;
-}
-
-/* Global scrollbar theming (safe, cross-browser) */
 * {
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 255, 180, 0.55) rgba(6, 10, 32, 0.85);
 }
 
-/* WebKit scrollbar — Vegas / Outlier style */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -1003,31 +956,22 @@ button {
   );
 }
 
+/* Slightly tighter scrollbar inside the chart rail (more “pro” look) */
+.chart-rail::-webkit-scrollbar {
+  height: 8px;
+}
+.chart-rail::-webkit-scrollbar-track {
+  background: rgba(6, 10, 32, 0.65);
+  border-radius: 999px;
+}
+.chart-rail::-webkit-scrollbar-thumb {
+  border: 1px solid rgba(6, 10, 32, 0.9);
+  border-radius: 999px;
+}
+
 /* -----------------------------------------------------
-   Scroll Sync: Sparklines row + Main chart (Players view)
+   (IMPORTANT) REMOVED: old scroll-sync CSS that caused glitches
+   - #player-sparklines overflow-x: auto
+   - #player-main-chart overflow-x: auto
+   Those are intentionally gone now.
    ----------------------------------------------------- */
-
-/* Make the spark row horizontally scrollable when needed */
-#player-sparklines{
-  display: flex !important;
-  gap: 8px !important;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding-bottom: 8px;
-  scroll-behavior: smooth;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* Each spark card becomes a fixed-width “tile” so it can scroll cleanly */
-#player-sparklines > .status-item{
-  flex: 0 0 160px;
-  min-width: 160px;
-}
-
-/* Main chart container can scroll horizontally if SVG is wider than the card */
-#player-main-chart{
-  overflow-x: auto;
-  overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;
-  scroll-behavior: smooth;
-}
