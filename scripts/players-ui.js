@@ -1,15 +1,18 @@
 // scripts/players-ui.js
-// Thread 7 – Players view shell + demo player list + click → stats card wiring
+// Thread 7 – Players view: game context + demo player list + live season stats card.
 
 (function () {
-  // Demo players to prove the flow. Later we replace this with real roster data.
+  const SEASON_API_URL = "/api/stats/season";
+
+  // Demo players to prove the full flow.
+  // bdlId values match BallDontLie player IDs.
   const DEMO_PLAYERS = [
-    { key: "demo-lebron", name: "LeBron James", team: "LAL", position: "F" },
-    { key: "demo-davis", name: "Anthony Davis", team: "LAL", position: "C/F" },
-    { key: "demo-tatum", name: "Jayson Tatum", team: "BOS", position: "F" },
-    { key: "demo-brown", name: "Jaylen Brown", team: "BOS", position: "G/F" },
-    { key: "demo-curry", name: "Stephen Curry", team: "GSW", position: "G" },
-    { key: "demo-giannis", name: "Giannis Antetokounmpo", team: "MIL", position: "F" },
+    { key: "demo-lebron",  name: "LeBron James",           team: "LAL", position: "F",   bdlId: 237 },
+    { key: "demo-davis",   name: "Anthony Davis",          team: "LAL", position: "C/F", bdlId: 140 },
+    { key: "demo-tatum",   name: "Jayson Tatum",           team: "BOS", position: "F",   bdlId: 434 },
+    { key: "demo-brown",   name: "Jaylen Brown",           team: "BOS", position: "G/F", bdlId: 286 },
+    { key: "demo-curry",   name: "Stephen Curry",          team: "GSW", position: "G",   bdlId: 115 },
+    { key: "demo-giannis", name: "Giannis Antetokounmpo",  team: "MIL", position: "F",   bdlId: 15  },
   ];
 
   function initPlayerViewPlaceholders() {
@@ -50,24 +53,120 @@
     });
   }
 
-  function updateStatsCardForPlayer(player) {
+  function setStatValuesFromObject(statsObj) {
+    const statEls = document.querySelectorAll(".player-stat-value");
+    statEls.forEach((el) => {
+      const key = el.dataset.statKey;
+      let raw = statsObj && Object.prototype.hasOwnProperty.call(statsObj, key)
+        ? statsObj[key]
+        : null;
+
+      if (raw === null || raw === undefined || raw === "" || Number.isNaN(raw)) {
+        el.textContent = "—";
+        return;
+      }
+
+      const num = typeof raw === "number" ? raw : parseFloat(raw);
+      if (Number.isFinite(num)) {
+        el.textContent = num.toFixed(1);
+      } else {
+        el.textContent = String(raw);
+      }
+    });
+  }
+
+  function toNum(val) {
+    if (val === null || val === undefined) return null;
+    const n = typeof val === "number" ? val : parseFloat(val);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function derivePra(stats) {
+    if (!stats) return null;
+    if (stats.pra !== undefined && stats.pra !== null) {
+      return toNum(stats.pra);
+    }
+    const pts = toNum(stats.pts ?? stats.points);
+    const reb = toNum(stats.reb ?? stats.trb ?? stats.rebounds);
+    const ast = toNum(stats.ast ?? stats.assists);
+    if (pts === null || reb === null || ast === null) return null;
+    return pts + reb + ast;
+  }
+
+  async function loadSeasonStatsForPlayer(player) {
     const titleEl = document.getElementById("player-card-title");
     const subtitleEl = document.getElementById("player-card-subtitle");
-    const statEls = document.querySelectorAll(".player-stat-value");
 
     if (titleEl) {
       titleEl.textContent = player.name;
     }
-
     if (subtitleEl) {
-      subtitleEl.textContent =
-        `Season averages for ${player.name} (${player.team} · ${player.position}) will load here from /api/stats/season in the next step.`;
+      subtitleEl.textContent = `Loading season averages for ${player.name} (${player.team} · ${player.position})…`;
     }
 
-    // For now we keep placeholders in the grid. Next thread: plug real numbers.
-    statEls.forEach((el) => {
-      el.textContent = "—";
-    });
+    // Set temporary placeholders while loading
+    setStatValuesFromObject({ pts: "—", reb: "—", ast: "—", pra: "—", fg3m: "—" });
+
+    if (!player.bdlId) {
+      if (subtitleEl) {
+        subtitleEl.textContent =
+          `No BallDontLie ID mapped for ${player.name} yet. Stats will be added once mapping is configured.`;
+      }
+      return;
+    }
+
+    try {
+      const url = `${SEASON_API_URL}?player_id=${encodeURIComponent(player.bdlId)}`;
+      const res = await fetch(url, { headers: { Accept: "application/json" } });
+
+      if (!res.ok) {
+        throw new Error(`Non-200 from /api/stats/season: ${res.status}`);
+      }
+
+      const payload = await res.json();
+      if (payload && payload.ok === false) {
+        throw new Error(
+          payload.error && payload.error.message
+            ? payload.error.message
+            : "API returned error"
+        );
+      }
+
+      // Try to be defensive about response shape.
+      const data = payload && (payload.data || payload.stats || payload.averages || payload);
+      const averages =
+        (data && (data.averages || data.season || data)) || {};
+
+      const pts = toNum(averages.pts ?? averages.points);
+      const reb = toNum(averages.reb ?? averages.trb ?? averages.rebounds);
+      const ast = toNum(averages.ast ?? averages.assists);
+      const pra = derivePra(averages);
+      const fg3m = toNum(averages.fg3m ?? averages.threes ?? averages["3pm"]);
+
+      const finalStats = {
+        pts: pts,
+        reb: reb,
+        ast: ast,
+        pra: pra,
+        fg3m: fg3m,
+      };
+
+      setStatValuesFromObject(finalStats);
+
+      if (subtitleEl) {
+        const seasonLabel =
+          (data && (data.season_label || data.season)) || "Current Season";
+        subtitleEl.textContent =
+          `Season averages for ${player.name} (${player.team} · ${player.position}) — ${seasonLabel}.`;
+      }
+    } catch (err) {
+      console.error("Failed to load season stats for player:", err);
+      if (subtitleEl) {
+        subtitleEl.textContent =
+          "Unable to load season stats right now. Please try again in a moment.";
+      }
+      // Leave placeholders as "—"
+    }
   }
 
   function renderDemoPlayers(gameLabel) {
@@ -96,7 +195,8 @@
           .forEach((el) => el.classList.remove("player-pill-active"));
         btn.classList.add("player-pill-active");
 
-        updateStatsCardForPlayer(player);
+        // Load stats into the card
+        loadSeasonStatsForPlayer(player);
       });
 
       gridEl.appendChild(btn);
