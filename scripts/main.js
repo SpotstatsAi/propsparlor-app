@@ -31,8 +31,7 @@
     // Respect whatever is pre-marked as active, fallback to "overview".
     const currentActive = document.querySelector(".nav-item.nav-item-active");
     const initialView =
-      (currentActive && currentActive.getAttribute("data-view")) ||
-      "overview";
+      (currentActive && currentActive.getAttribute("data-view")) || "overview";
 
     activate(initialView);
   }
