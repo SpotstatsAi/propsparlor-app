@@ -1,144 +1,173 @@
-// /functions/api/players/search.js
-// Route: GET /api/players/search?query=lebron&cursor=...&per_page=...
+// functions/api/players/search.js
 
-function jsonResponse(body, init = {}) {
-  const status = init.status || 200;
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init.headers || {}),
-    },
-  });
-}
+const BASE_URL = "https://api.balldontlie.io";
 
-function errorResponse(status, code, message) {
-  return jsonResponse(
-    {
-      ok: false,
-      error: { code, message },
-    },
-    { status }
-  );
-}
-
+/**
+ * GET /api/players/search?q=lebron
+ *
+ * Wraps BDL players search with KV caching.
+ */
 export async function onRequest(context) {
   const { request, env } = context;
-
   const url = new URL(request.url);
-  const query = (url.searchParams.get("query") || "").trim();
-  const cursor = url.searchParams.get("cursor") || null;
-  const perPageParam = url.searchParams.get("per_page");
+  const q = (url.searchParams.get("q") || "").trim();
 
-  if (!query || query.length < 2) {
-    return errorResponse(
-      400,
-      "BAD_REQUEST",
-      "Query parameter 'query' is required and must be at least 2 characters."
+  // If query is empty or super short, just return empty list (cheap no-op)
+  if (!q || q.length < 2) {
+    const payload = JSON.stringify(
+      {
+        ok: true,
+        query: q,
+        players: [],
+        meta: null,
+      },
+      null,
+      2
     );
-  }
 
-  const perPage = (() => {
-    const fallback = 25;
-    if (!perPageParam) return fallback;
-    const n = Number(perPageParam);
-    if (!Number.isFinite(n) || n <= 0 || n > 100) return fallback;
-    return n;
-  })();
-
-  const bdlUrl = new URL("https://api.balldontlie.io/nba/v1/players");
-  bdlUrl.searchParams.set("search", query);
-  bdlUrl.searchParams.set("per_page", String(perPage));
-  if (cursor) {
-    bdlUrl.searchParams.set("cursor", cursor);
-  }
-
-  const apiKey = env.BDL_API_KEY;
-  if (!apiKey) {
-    return errorResponse(
-      500,
-      "CONFIG_ERROR",
-      "BDL_API_KEY is not configured in the environment."
-    );
-  }
-
-  let upstream;
-  try {
-    upstream = await fetch(bdlUrl.toString(), {
-      method: "GET",
+    return new Response(payload, {
+      status: 200,
       headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
       },
     });
-  } catch {
-    return errorResponse(
-      502,
-      "UPSTREAM_FETCH_FAILED",
-      "Failed to reach BALLDONTLIE players endpoint."
-    );
   }
 
-  if (!upstream.ok) {
-    return errorResponse(
-      502,
-      "UPSTREAM_ERROR",
-      `BALLDONTLIE players endpoint returned status ${upstream.status}.`
-    );
-  }
+  // Normalize for cache key
+  const normalizedQuery = q.toLowerCase();
+  const cacheKey = `players-search:${normalizedQuery}`;
 
-  let raw;
+  // 1) Try KV cache first
   try {
-    raw = await upstream.json();
-  } catch {
-    return errorResponse(
-      502,
-      "UPSTREAM_PARSE_FAILED",
-      "Unable to parse BALLDONTLIE players response as JSON."
-    );
+    const cached = await env.PROPSPARLOR_BDL_CACHE.get(cacheKey);
+
+    if (cached) {
+      return new Response(cached, {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+        },
+      });
+    }
+  } catch (err) {
+    console.error("KV get error (players-search):", err);
+    // fall through and hit BDL anyway
   }
 
-  const rawPlayers = Array.isArray(raw.data) ? raw.data : [];
-  const players = rawPlayers.map((p) => {
-    const team = p.team || {};
-    const first = p.first_name || "";
-    const last = p.last_name || "";
-    const full = `${first} ${last}`.trim();
+  // 2) Cache miss → call BDL players endpoint
+  try {
+    // Per docs: GET https://api.balldontlie.io/v1/players?search=...
+    const bdlUrl = new URL("/v1/players", BASE_URL);
+    bdlUrl.searchParams.set("search", q);
+    bdlUrl.searchParams.set("per_page", "50"); // a bit higher so search feels complete
 
-    return {
-      id: p.id,
-      first_name: first,
-      last_name: last,
-      full_name: full,
-      position: p.position || null,
-      jersey_number: p.jersey_number ?? null,
-      height: p.height ?? null,
-      weight: p.weight ?? null,
-      team: {
-        id: team.id ?? null,
-        name: team.full_name ?? team.name ?? null,
-        full_name: team.full_name ?? team.name ?? null,
-        abbreviation: team.abbreviation ?? null,
-        city: team.city ?? null,
-        conference: team.conference ?? null,
-        division: team.division ?? null,
+    const response = await fetch(bdlUrl.toString(), {
+      method: "GET",
+      headers: {
+        // BDL expects Authorization: YOUR_API_KEY
+        Authorization: env.BDL_API_KEY,
       },
-    };
-  });
+    });
 
-  const meta = raw.meta || {};
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "");
+      console.error("BDL players-search error:", response.status, errorText);
 
-  return jsonResponse({
-    ok: true,
-    query,
-    count: players.length,
-    data: players,
-    meta: {
-      source: "balldontlie",
-      sport: "nba",
-      endpoint: "players.search",
-      cursor: meta.cursor ?? null,
-      next_cursor: meta.next_cursor ?? null,
-    },
-  });
+      return new Response(
+        JSON.stringify(
+          {
+            ok: false,
+            error: {
+              source: "BDL",
+              status: response.status,
+              message: "Failed to fetch players from BallDontLie.",
+              details: errorText || null,
+            },
+          },
+          null,
+          2
+        ),
+        {
+          status: 500,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
+        }
+      );
+    }
+
+    const json = await response.json();
+
+    // 3) Clean response for frontend
+    const cleanedPlayers = (json.data || []).map((p) => ({
+      id: p.id,
+      first_name: p.first_name,
+      last_name: p.last_name,
+      full_name: `${p.first_name} ${p.last_name}`.trim(),
+      position: p.position,
+      height: p.height,
+      weight: p.weight,
+      jersey_number: p.jersey_number,
+      college: p.college,
+      country: p.country,
+      draft_year: p.draft_year,
+      draft_round: p.draft_round,
+      draft_number: p.draft_number,
+      team: p.team || null,
+    }));
+
+    const payload = JSON.stringify(
+      {
+        ok: true,
+        query: q,
+        players: cleanedPlayers,
+        meta: json.meta || null,
+      },
+      null,
+      2
+    );
+
+    // 4) Store in KV with a long TTL (7 days)
+    try {
+      await env.PROPSPARLOR_BDL_CACHE.put(cacheKey, payload, {
+        expirationTtl: 60 * 60 * 24 * 7, // 7 days
+      });
+    } catch (err) {
+      console.error("KV put error (players-search):", err);
+      // still return fresh data
+    }
+
+    return new Response(payload, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+      },
+    });
+  } catch (err) {
+    console.error("Unexpected error in players-search:", err);
+    return new Response(
+      JSON.stringify(
+        {
+          ok: false,
+          error: {
+            source: "worker",
+            message: "Unexpected error in players-search.",
+          },
+        },
+        null,
+        2
+      ),
+      {
+        status: 500,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+        },
+      }
+    );
+  }
 }
