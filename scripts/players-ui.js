@@ -1,5 +1,5 @@
 // scripts/players-ui.js
-// Thread 7 – Players view: game context + demo player list +
+// Thread 7 – Players view: game context + matchup-aware demo player list +
 // tabbed Season / Last 10 / Last 5 stats card + mini chart.
 
 (function () {
@@ -21,6 +21,10 @@
   let currentPlayer = null;
   let currentTab = "season"; // "season" | "last10" | "last5"
   const statsCache = Object.create(null); // key: `${playerId}:${tab}`
+
+  // ---------------------------------------------------------------------------
+  // Basic view wiring
+  // ---------------------------------------------------------------------------
 
   function initPlayerViewPlaceholders() {
     const gameCtx = document.getElementById("players-game-context");
@@ -63,7 +67,9 @@
     });
   }
 
-  // ---------- Tabs + card helpers ----------
+  // ---------------------------------------------------------------------------
+  // Tabs + card helpers
+  // ---------------------------------------------------------------------------
 
   function ensureTabsInitialized() {
     const cardShell = document.querySelector(".player-card-shell");
@@ -162,7 +168,9 @@
     return pts + reb + ast;
   }
 
-  // ---------- Mini chart ----------
+  // ---------------------------------------------------------------------------
+  // Mini chart
+  // ---------------------------------------------------------------------------
 
   function updateChart(statsObj) {
     const bodyEl = document.getElementById("player-chart-body");
@@ -233,8 +241,7 @@
 
       const valEl = document.createElement("span");
       valEl.className = "player-chart-value";
-      valEl.textContent =
-        value === null ? "—" : value.toFixed(1);
+      valEl.textContent = value === null ? "—" : value.toFixed(1);
 
       rowEl.appendChild(labelEl);
       rowEl.appendChild(trackEl);
@@ -244,7 +251,9 @@
     });
   }
 
-  // ---------- Tab text helpers ----------
+  // ---------------------------------------------------------------------------
+  // Tab text helpers
+  // ---------------------------------------------------------------------------
 
   function subtitleForTab(tab, player, isLoading) {
     if (!player) {
@@ -383,7 +392,37 @@
     renderTabStats(currentTab);
   }
 
-  // ---------- Player list + click wiring ----------
+  // ---------------------------------------------------------------------------
+  // Matchup parsing + player list wiring
+  // ---------------------------------------------------------------------------
+
+  function extractTeamsFromLabel(label) {
+    if (!label) return null;
+    // Normalize whitespace
+    const cleaned = label.replace(/\s+/g, " ").trim();
+    let parts;
+
+    if (cleaned.includes("@")) {
+      parts = cleaned.split("@");
+    } else if (/vs\.?/i.test(cleaned)) {
+      parts = cleaned.split(/vs\.?/i);
+    } else if (/\sat\s/i.test(cleaned)) {
+      parts = cleaned.split(/\sat\s/i);
+    } else {
+      return null;
+    }
+
+    if (!parts || parts.length !== 2) return null;
+
+    const left = parts[0].trim();
+    const right = parts[1].trim();
+
+    // Take first 3 characters as team code, uppercase
+    const away = left.slice(0, 3).toUpperCase();
+    const home = right.slice(0, 3).toUpperCase();
+
+    return { away, home };
+  }
 
   function renderDemoPlayers(gameLabel) {
     const introEl = document.getElementById("players-list-intro");
@@ -392,13 +431,32 @@
 
     gridEl.innerHTML = "";
 
-    if (introEl) {
-      introEl.textContent = gameLabel
-        ? `Demo key players for ${gameLabel}. Later this will be driven by real rosters from BDL.`
-        : "Demo key players. Later this will be driven by real rosters from BDL.";
+    const teams = extractTeamsFromLabel(gameLabel);
+    let playersForMatchup = DEMO_PLAYERS;
+
+    if (teams) {
+      const filtered = DEMO_PLAYERS.filter(
+        (p) => p.team === teams.away || p.team === teams.home
+      );
+      if (filtered.length > 0) {
+        playersForMatchup = filtered;
+      }
     }
 
-    DEMO_PLAYERS.forEach((player) => {
+    if (introEl) {
+      if (teams) {
+        introEl.textContent = `Demo key players for ${
+          teams.away
+        } and ${teams.home} in ${gameLabel}. Later this will be driven by real rosters from BDL.`;
+      } else if (gameLabel) {
+        introEl.textContent = `Demo key players for ${gameLabel}. Later this will be driven by real rosters from BDL.`;
+      } else {
+        introEl.textContent =
+          "Demo key players. Later this will be driven by real rosters from BDL.";
+      }
+    }
+
+    playersForMatchup.forEach((player) => {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "player-pill";
@@ -444,9 +502,18 @@
         gameLabel || "Game selected – players for this matchup will load here.";
     }
 
+    // Reset current player when switching games
+    currentPlayer = null;
+    const titleEl = document.getElementById("player-card-title");
+    if (titleEl) {
+      titleEl.textContent = "No player selected";
+    }
+    applySubtitle(currentTab, currentPlayer, false);
+    setStatValuesFromObject({});
+    updateChart(null);
+
     ensureTabsInitialized();
     updateTabActiveClasses();
-    updateChart(null);
     renderDemoPlayers(gameLabel);
   }
 
