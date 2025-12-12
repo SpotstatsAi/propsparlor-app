@@ -219,6 +219,77 @@
                     </div>
                   </div>
 
+                  <!-- Charts (placeholder-first; wired next step) -->
+                  <div class="panel" style="margin-top: 12px; padding: 12px 12px 14px;">
+                    <div class="panel-header" style="margin-bottom: 6px;">
+                      <span class="panel-title">Charts</span>
+                      <span class="panel-tag panel-tag-soft">Outlier-Grade · Placeholder</span>
+                    </div>
+
+                    <p class="panel-text" style="margin-bottom: 10px;">
+                      This area will render trend charts for the selected stat (Season / L10 / L5), including rolling averages and distribution.
+                    </p>
+
+                    <!-- Mini sparklines row -->
+                    <div
+                      id="player-sparklines"
+                      style="
+                        display: grid;
+                        grid-template-columns: repeat(5, minmax(0, 1fr));
+                        gap: 8px;
+                        margin-bottom: 10px;
+                      "
+                    >
+                      <div class="status-item" style="grid-template-columns: 1fr; row-gap: 6px; padding: 10px;">
+                        <span class="status-label">PTS Spark</span>
+                        <div style="height: 34px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.18);"></div>
+                      </div>
+                      <div class="status-item" style="grid-template-columns: 1fr; row-gap: 6px; padding: 10px;">
+                        <span class="status-label">REB Spark</span>
+                        <div style="height: 34px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.18);"></div>
+                      </div>
+                      <div class="status-item" style="grid-template-columns: 1fr; row-gap: 6px; padding: 10px;">
+                        <span class="status-label">AST Spark</span>
+                        <div style="height: 34px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.18);"></div>
+                      </div>
+                      <div class="status-item" style="grid-template-columns: 1fr; row-gap: 6px; padding: 10px;">
+                        <span class="status-label">PRA Spark</span>
+                        <div style="height: 34px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.18);"></div>
+                      </div>
+                      <div class="status-item" style="grid-template-columns: 1fr; row-gap: 6px; padding: 10px;">
+                        <span class="status-label">3PM Spark</span>
+                        <div style="height: 34px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.18);"></div>
+                      </div>
+                    </div>
+
+                    <!-- Main chart canvas placeholder -->
+                    <div
+                      id="player-main-chart"
+                      style="
+                        height: 210px;
+                        border-radius: 16px;
+                        border: 1px solid rgba(0,255,180,0.18);
+                        background: radial-gradient(circle at top left, rgba(18, 26, 68, 0.35), rgba(4, 4, 18, 0.92));
+                        box-shadow: 0 0 28px rgba(0,255,180,0.10);
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        text-align: center;
+                        padding: 12px;
+                      "
+                    >
+                      <div style="max-width: 420px;">
+                        <div style="font-size: 0.82rem; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.85; margin-bottom: 6px;">
+                          Main Trend Chart
+                        </div>
+                        <div style="font-size: 0.88rem; line-height: 1.5; opacity: 0.9;">
+                          Placeholder for rolling game-log chart + prop line overlay + hit-rate shading.
+                          Next step wires this to real game logs.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   <button id="player-add-slip" class="slip-button" type="button" disabled>
                     Add to Slip (Disabled · No Player)
                   </button>
