@@ -415,6 +415,43 @@ body {
   opacity: 0.8;
 }
 
+.slip-row {
+  padding: 10px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: radial-gradient(circle at top left, rgba(18, 26, 68, 0.62), rgba(4, 4, 18, 0.92));
+  margin-bottom: 8px;
+}
+
+.slip-row-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.slip-row-title {
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+}
+
+.slip-row-tag {
+  font-size: 0.66rem;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 255, 180, 0.35);
+  background: rgba(0, 20, 20, 0.55);
+  opacity: 0.9;
+  white-space: nowrap;
+}
+
+.slip-row-sub {
+  font-size: 0.7rem;
+  opacity: 0.82;
+  line-height: 1.35;
+}
+
 .slip-button {
   width: 100%;
   margin-top: auto;
@@ -561,158 +598,287 @@ body {
     0 0 18px rgba(59, 214, 255, 0.35);
 }
 
-/* ---------------------------------------------
-   Thread 7 — Players & Props UI (Vegas styling)
-   --------------------------------------------- */
+/* -----------------------------------------------------
+   THREAD 7 — PLAYERS VIEW (fix “broken buttons” + pro chart placeholder)
+   ----------------------------------------------------- */
 
-.players-layout {
-  display: grid;
-  grid-template-columns: 1fr 1.25fr;
-  gap: 14px;
-  margin-top: 12px;
+/* Make buttons consistently “Vegas” (prevents default white button styles) */
+button {
+  font-family: inherit;
 }
 
-.players-list-shell {
-  padding: 10px 10px 12px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: radial-gradient(circle at top left, rgba(18, 26, 68, 0.55), rgba(4, 4, 18, 0.92));
-  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.55);
+.player-pill,
+.player-tab,
+#player-add-slip {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #f5f5ff;
 }
 
-.players-list-grid {
+/* Players view header context */
+#players-game-context {
+  font-size: 0.85rem;
+  opacity: 0.9;
+  margin-bottom: 6px;
+}
+
+/* Demo players / roster pills */
+#players-list-intro {
+  font-size: 0.78rem;
+  opacity: 0.82;
+  line-height: 1.4;
+  margin-bottom: 8px;
+}
+
+#players-list-grid {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 10px;
+  margin-bottom: 12px;
 }
 
 .player-pill {
-  appearance: none;
-  border-radius: 999px;
-  border: 1px solid rgba(0, 255, 180, 0.28);
   padding: 6px 10px;
-  font-size: 0.78rem;
-  letter-spacing: 0.04em;
-  background: rgba(0, 10, 20, 0.35);
-  color: #e9fbff;
+  border-radius: 999px;
   cursor: pointer;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  border-color: rgba(255, 255, 255, 0.08);
+  background: radial-gradient(circle at 0 0, rgba(18, 26, 68, 0.55), rgba(4, 4, 18, 0.92));
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.03),
+    0 0 14px rgba(0, 255, 180, 0.08);
   opacity: 0.92;
   transition:
     transform 0.08s ease,
-    box-shadow 0.18s ease,
-    border-color 0.18s ease,
-    background 0.18s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
     opacity 0.15s ease;
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.04),
-    0 0 16px rgba(0, 255, 180, 0.10);
 }
 
 .player-pill:hover {
   opacity: 1;
-  border-color: rgba(0, 255, 180, 0.55);
-  background: rgba(0, 20, 40, 0.55);
+  border-color: rgba(0, 255, 180, 0.35);
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.08),
-    0 0 22px rgba(0, 255, 180, 0.22);
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 0 18px rgba(0, 255, 180, 0.18);
   transform: translateY(-0.5px);
 }
 
-.player-pill:active {
-  transform: translateY(0.5px) scale(0.99);
-}
-
 .player-pill-active {
-  border-color: rgba(0, 255, 180, 0.85);
-  background: radial-gradient(circle at 0 0, rgba(0, 255, 180, 0.22), rgba(0, 40, 80, 0.55));
+  border-color: rgba(0, 255, 180, 0.75);
+  background: radial-gradient(circle at 0 0, rgba(0, 255, 180, 0.22), rgba(0, 40, 80, 0.78));
   box-shadow:
-    0 0 14px rgba(0, 255, 180, 0.35),
-    0 0 26px rgba(0, 120, 255, 0.22);
-  opacity: 1;
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 0 26px rgba(0, 255, 180, 0.28),
+    0 0 30px rgba(0, 120, 255, 0.18);
 }
 
-/* Tabs (Season / L10 / L5) use the same pill system */
+/* Player card shell (assumes your HTML has this wrapper already) */
+.player-card-shell {
+  margin-top: 10px;
+  padding: 14px 14px 16px;
+  border-radius: 18px;
+  background: radial-gradient(circle at top left, rgba(18, 26, 68, 0.65), rgba(4, 4, 18, 0.96));
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow:
+    0 14px 32px rgba(0, 0, 0, 0.85),
+    0 0 26px rgba(0, 255, 180, 0.08);
+}
+
+#player-card-title {
+  font-size: 1.05rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+#player-card-subtitle {
+  font-size: 0.82rem;
+  opacity: 0.84;
+  line-height: 1.35;
+  margin-bottom: 10px;
+}
+
+/* Tabs inherit pill styling */
 .player-tabs .player-pill {
   padding: 5px 10px;
   font-size: 0.74rem;
 }
 
-.player-card-shell {
-  padding: 12px 12px 14px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: radial-gradient(circle at top left, rgba(18, 26, 68, 0.45), rgba(4, 4, 18, 0.92));
-  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.55);
-}
-
+/* Stats grid */
 .player-stats-grid {
   display: grid;
+  grid-template-columns: 1fr;
   gap: 8px;
-  margin-top: 10px;
 }
 
+/* Row is clickable and has a “meter fill” */
 .player-stat-row {
-  --fill: 0%;
   position: relative;
   display: grid;
-  grid-template-columns: 64px 1fr;
+  grid-template-columns: 70px 1fr;
   align-items: center;
   gap: 10px;
-  padding: 9px 10px;
-  border-radius: 12px;
+  padding: 10px 10px;
+  border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(0, 0, 0, 0.18);
+  background: linear-gradient(145deg, rgba(10, 10, 32, 0.55), rgba(4, 4, 16, 0.65));
   cursor: pointer;
   overflow: hidden;
 }
 
+/* Meter layer */
 .player-stat-row::before {
   content: "";
   position: absolute;
   inset: 0;
-  width: var(--fill);
-  background: radial-gradient(circle at 0 0, rgba(0, 255, 180, 0.22), rgba(0, 120, 255, 0.10));
-  opacity: 0.9;
+  width: var(--fill, 0%);
+  background: radial-gradient(circle at 0 0, rgba(0, 255, 180, 0.20), rgba(0, 120, 255, 0.14));
+  border-right: 1px solid rgba(0, 255, 180, 0.18);
+  opacity: 0.95;
   pointer-events: none;
 }
 
+/* Row content above meter */
 .player-stat-row > * {
   position: relative;
+  z-index: 1;
 }
 
 .player-stat-label {
-  font-size: 0.72rem;
-  letter-spacing: 0.12em;
+  font-size: 0.76rem;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  opacity: 0.9;
+  opacity: 0.88;
 }
 
 .player-stat-value {
-  font-size: 0.92rem;
-  font-weight: 650;
+  font-size: 0.9rem;
   letter-spacing: 0.02em;
+  text-align: left;
+}
+
+.player-stat-row:hover {
+  border-color: rgba(0, 255, 180, 0.25);
+  box-shadow: 0 0 18px rgba(0, 255, 180, 0.10);
 }
 
 .player-stat-row-active {
-  border-color: rgba(0, 255, 180, 0.70);
-  box-shadow: 0 0 18px rgba(0, 255, 180, 0.22);
+  border-color: rgba(0, 255, 180, 0.75);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 0 26px rgba(0, 255, 180, 0.22);
 }
 
-/* Enable the Add to Slip button (your JS toggles disabled) */
-#player-add-slip.slip-button {
+/* Add-to-slip button (real, not disabled-styled) */
+#player-add-slip {
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   cursor: pointer;
-  opacity: 0.95;
+  border: 1px solid rgba(0, 255, 180, 0.35);
+  background: radial-gradient(circle at 0 0, rgba(0, 255, 180, 0.22), rgba(6, 6, 24, 0.96));
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 0 22px rgba(0, 255, 180, 0.14);
+  transition: transform 0.08s ease, box-shadow 0.15s ease, border-color 0.15s ease;
 }
 
-#player-add-slip.slip-button:disabled {
+#player-add-slip:hover:enabled {
+  transform: translateY(-0.5px);
+  border-color: rgba(0, 255, 180, 0.65);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 0 28px rgba(0, 255, 180, 0.22);
+}
+
+#player-add-slip:active:enabled {
+  transform: translateY(0.5px) scale(0.99);
+}
+
+#player-add-slip:disabled {
   cursor: not-allowed;
   opacity: 0.55;
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: none;
 }
 
-/* Responsive */
-@media (max-width: 960px) {
-  .players-layout {
-    grid-template-columns: 1fr;
-  }
+/* “Outlier-grade” chart card placeholder styles (we’ll wire data next step) */
+.player-chart-card {
+  margin-top: 12px;
+  border-radius: 18px;
+  padding: 12px 12px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: radial-gradient(circle at top left, rgba(18, 26, 68, 0.52), rgba(4, 4, 18, 0.95));
+  box-shadow:
+    0 14px 32px rgba(0, 0, 0, 0.85),
+    0 0 24px rgba(0, 255, 180, 0.08);
+}
+
+.player-chart-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.player-chart-title {
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.92;
+}
+
+.player-chart-meta {
+  font-size: 0.7rem;
+  opacity: 0.75;
+  white-space: nowrap;
+}
+
+.player-chart-canvas {
+  position: relative;
+  height: 180px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.10), rgba(0, 0, 0, 0.35)),
+    radial-gradient(circle at 0 0, rgba(0, 255, 180, 0.08), transparent 60%);
+  overflow: hidden;
+}
+
+/* subtle grid */
+.player-chart-canvas::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 28px 28px;
+  opacity: 0.18;
+  pointer-events: none;
+}
+
+/* placeholder “neon line” */
+.player-chart-line {
+  position: absolute;
+  inset: 0;
+  opacity: 0.9;
+  pointer-events: none;
+  filter: drop-shadow(0 0 10px rgba(0, 255, 180, 0.25));
+}
+
+.player-chart-footnote {
+  margin-top: 8px;
+  font-size: 0.72rem;
+  opacity: 0.72;
+  line-height: 1.35;
 }
