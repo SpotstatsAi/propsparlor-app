@@ -170,6 +170,17 @@ body {
   gap: 14px;
 }
 
+/* Views */
+.view {
+  display: none;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.view-active {
+  display: flex;
+}
+
 /* Cards / panels */
 .hero-card {
   width: 100%;
