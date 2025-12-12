@@ -164,20 +164,70 @@
 
           <!-- PLAYERS & PROPS VIEW -->
           <section class="view" data-view-panel="players">
+            <!-- Intro panel -->
             <section class="panel">
               <div class="panel-header">
-                <span class="panel-title">Players &amp; Props Shell</span>
-                <span class="panel-tag panel-tag-soft">Static · Thread 1</span>
+                <span class="panel-title">Players &amp; Props</span>
+                <span class="panel-tag panel-tag-soft">Thread 7 · Shell</span>
               </div>
               <p class="panel-text">
                 This view will hold player search, stat summaries, and your
-                green/yellow/red prop suggestions. In this thread it stays
-                static to keep the UI foundation clean and testable.
+                green/yellow/red prop suggestions. In this thread we begin
+                wiring the layout for per-game player lists and season stats
+                coming from your Cloudflare backend.
               </p>
               <p class="panel-text">
-                Future work: typeahead search, player cards, and quick-add prop
-                actions that feed into the Pick Slip on the right.
+                Flow (v1): click a game in Today&apos;s Games &rarr; jump here with that matchup
+                pre-selected &rarr; click a player to see their core season stats.
               </p>
+            </section>
+
+            <!-- Game context panel -->
+            <section class="panel">
+              <div class="panel-header">
+                <span class="panel-title">Game Context</span>
+                <span class="panel-tag panel-tag-soft">From Today&apos;s Games</span>
+              </div>
+              <p id="players-game-context" class="panel-text">
+                Select a game from Today&apos;s Games to load players.
+              </p>
+            </section>
+
+            <!-- Player stats shell (wired to /api/stats/season in later steps) -->
+            <section class="panel">
+              <div class="panel-header">
+                <span class="panel-title">Player Stats Card</span>
+                <span class="panel-tag panel-tag-soft">Season Averages</span>
+              </div>
+              <div class="player-card-shell">
+                <h3 id="player-card-title">No player selected</h3>
+                <p id="player-card-subtitle" class="panel-text">
+                  When you click a player, we&apos;ll pull their season averages from
+                  /api/stats/season and show core props like PTS, REB, AST, PRA, and 3PM.
+                </p>
+                <div class="player-stats-grid">
+                  <div class="player-stat-row">
+                    <span class="player-stat-label">PTS</span>
+                    <span class="player-stat-value" data-stat-key="pts">—</span>
+                  </div>
+                  <div class="player-stat-row">
+                    <span class="player-stat-label">REB</span>
+                    <span class="player-stat-value" data-stat-key="reb">—</span>
+                  </div>
+                  <div class="player-stat-row">
+                    <span class="player-stat-label">AST</span>
+                    <span class="player-stat-value" data-stat-key="ast">—</span>
+                  </div>
+                  <div class="player-stat-row">
+                    <span class="player-stat-label">PRA</span>
+                    <span class="player-stat-value" data-stat-key="pra">—</span>
+                  </div>
+                  <div class="player-stat-row">
+                    <span class="player-stat-label">3PM</span>
+                    <span class="player-stat-value" data-stat-key="fg3m">—</span>
+                  </div>
+                </div>
+              </div>
             </section>
           </section>
 
@@ -233,5 +283,6 @@
 
   <script src="scripts/main.js"></script>
   <script src="scripts/games-today-ui.js"></script>
+  <script src="scripts/players-ui.js"></script>
 </body>
 </html>
