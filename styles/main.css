@@ -950,3 +950,13 @@ button {
   overflow-y: visible;   /* allow footer text to breathe */
   isolation: isolate;
 }
+
+/* Thread 7 — Main chart must be allowed to grow (override inline height) */
+#player-main-chart {
+  height: auto !important;
+  min-height: 210px;
+
+  display: block !important;   /* stop flex-centering from fighting real chart layout */
+  overflow-x: hidden;
+  overflow-y: visible;
+}
