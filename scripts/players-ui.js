@@ -1,7 +1,17 @@
 // scripts/players-ui.js
-// Thread 7 – Players view shell + helper to open it from the games table.
+// Thread 7 – Players view shell + demo player list + click → stats card wiring
 
 (function () {
+  // Demo players to prove the flow. Later we replace this with real roster data.
+  const DEMO_PLAYERS = [
+    { key: "demo-lebron", name: "LeBron James", team: "LAL", position: "F" },
+    { key: "demo-davis", name: "Anthony Davis", team: "LAL", position: "C/F" },
+    { key: "demo-tatum", name: "Jayson Tatum", team: "BOS", position: "F" },
+    { key: "demo-brown", name: "Jaylen Brown", team: "BOS", position: "G/F" },
+    { key: "demo-curry", name: "Stephen Curry", team: "GSW", position: "G" },
+    { key: "demo-giannis", name: "Giannis Antetokounmpo", team: "MIL", position: "F" },
+  ];
+
   function initPlayerViewPlaceholders() {
     const gameCtx = document.getElementById("players-game-context");
     const titleEl = document.getElementById("player-card-title");
@@ -20,7 +30,7 @@
     if (subtitleEl && !subtitleEl.dataset.initialized) {
       subtitleEl.dataset.initialized = "true";
       subtitleEl.textContent =
-        "When you click a player, we'll show their season averages here.";
+        "Select a player from the list above. We'll show their season averages here once the backend is wired.";
     }
   }
 
@@ -40,10 +50,62 @@
     });
   }
 
+  function updateStatsCardForPlayer(player) {
+    const titleEl = document.getElementById("player-card-title");
+    const subtitleEl = document.getElementById("player-card-subtitle");
+    const statEls = document.querySelectorAll(".player-stat-value");
+
+    if (titleEl) {
+      titleEl.textContent = player.name;
+    }
+
+    if (subtitleEl) {
+      subtitleEl.textContent =
+        `Season averages for ${player.name} (${player.team} · ${player.position}) will load here from /api/stats/season in the next step.`;
+    }
+
+    // For now we keep placeholders in the grid. In the next thread we plug real numbers.
+    statEls.forEach((el) => {
+      el.textContent = "—";
+    });
+  }
+
+  function renderDemoPlayers(gameLabel) {
+    const introEl = document.getElementById("players-list-intro");
+    const gridEl = document.getElementById("players-list-grid");
+    if (!gridEl) return;
+
+    gridEl.innerHTML = "";
+
+    if (introEl) {
+      introEl.textContent = gameLabel
+        ? `Demo key players for ${gameLabel}. Later this will be driven by real rosters from BDL.`
+        : "Demo key players. Later this will be driven by real rosters from BDL.";
+    }
+
+    DEMO_PLAYERS.forEach((player) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "player-pill";
+      btn.textContent = `${player.name} · ${player.team}`;
+
+      btn.addEventListener("click", () => {
+        // Mark active pill
+        document
+          .querySelectorAll(".player-pill")
+          .forEach((el) => el.classList.remove("player-pill-active"));
+        btn.classList.add("player-pill-active");
+
+        updateStatsCardForPlayer(player);
+      });
+
+      gridEl.appendChild(btn);
+    });
+  }
+
   /**
    * Public helper: open the Players view for a given game label.
-   * In the next step, the games table will call this with something like:
-   *   PropsParlor.openPlayersForGame("LAL @ BOS · 7:30 PM");
+   * Called from games-today-ui.js when a user clicks "Players & Stats".
    */
   function openPlayersForGame(gameLabel) {
     switchToPlayersView();
@@ -53,6 +115,8 @@
       gameCtx.textContent =
         gameLabel || "Game selected – players for this matchup will load here.";
     }
+
+    renderDemoPlayers(gameLabel);
   }
 
   document.addEventListener("DOMContentLoaded", initPlayerViewPlaceholders);
