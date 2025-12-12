@@ -1,5 +1,7 @@
 // functions/games-today.js
 
+const BASE_URL = "https://api.balldontlie.io";
+
 export async function onRequest(context) {
   const { env } = context;
 
@@ -31,14 +33,15 @@ export async function onRequest(context) {
 
   // 4) Cache miss → call BDL
   try {
-    const url = new URL("https://api.balldontlie.io/v2/games");
+    const url = new URL("/nba/v1/games", BASE_URL);
     url.searchParams.set("dates[]", today);
     url.searchParams.set("per_page", "100");
 
     const response = await fetch(url.toString(), {
       method: "GET",
       headers: {
-        Authorization: `Bearer ${env.BDL_API_KEY}`,
+        // BDL docs show Authorization: API_KEY (no Bearer prefix)
+        Authorization: env.BDL_API_KEY,
       },
     });
 
@@ -47,14 +50,19 @@ export async function onRequest(context) {
       console.error("BDL games-today error:", response.status, errorText);
 
       return new Response(
-        JSON.stringify({
-          ok: false,
-          error: {
-            source: "BDL",
-            status: response.status,
-            message: "Failed to fetch games from BallDontLie.",
+        JSON.stringify(
+          {
+            ok: false,
+            error: {
+              source: "BDL",
+              status: response.status,
+              message: "Failed to fetch games from BallDontLie.",
+              details: errorText || null,
+            },
           },
-        }),
+          null,
+          2
+        ),
         {
           status: 500,
           headers: {
@@ -87,6 +95,7 @@ export async function onRequest(context) {
         ok: true,
         date: today,
         games: cleanedGames,
+        meta: json.meta || null,
       },
       null,
       2
@@ -113,13 +122,17 @@ export async function onRequest(context) {
   } catch (err) {
     console.error("Unexpected error in games-today:", err);
     return new Response(
-      JSON.stringify({
-        ok: false,
-        error: {
-          source: "worker",
-          message: "Unexpected error in games-today.",
+      JSON.stringify(
+        {
+          ok: false,
+          error: {
+            source: "worker",
+            message: "Unexpected error in games-today.",
+          },
         },
-      }),
+        null,
+        2
+      ),
       {
         status: 500,
         headers: {
