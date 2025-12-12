@@ -203,7 +203,6 @@
     syncAddSlipButtonDisabled();
 
     if (currentPlayer && currentPlayer.bdlId) {
-      // Reset prop-line to a sensible default on stat change
       propLine = null;
       renderChartsForCurrentPlayer().catch(() => {});
     }
@@ -339,7 +338,6 @@
     updateTabActiveClasses();
     if (!currentPlayer) return;
 
-    // Reset prop-line default when tab changes (so line matches window)
     propLine = null;
     renderTabStats(currentTab);
   }
@@ -402,7 +400,6 @@
         const titleEl = document.getElementById("player-card-title");
         if (titleEl) titleEl.textContent = player.name;
 
-        // Reset prop-line on new player
         propLine = null;
         propMode = "over";
 
@@ -538,7 +535,6 @@
         .join(" · ") || "No numeric stats available";
 
     li.appendChild(header);
-    li.appendChild(tagEl);
     li.appendChild(sub);
     slipList.appendChild(li);
   }
@@ -550,13 +546,11 @@
     if (gameCtx) gameCtx.textContent = gameLabel || "Game selected.";
 
     currentPlayer = null;
+    propLine = null;
+    propMode = "over";
 
     const titleEl = document.getElementById("player-card-title");
     if (titleEl) titleEl.textContent = "No player selected";
-
-    // reset line controls for new game context
-    propLine = null;
-    propMode = "over";
 
     applySubtitle(currentTab, currentPlayer, false);
     setStatValuesFromObject({});
@@ -621,7 +615,6 @@
 
   function seriesForKey(rows, key) {
     const ordered = rows.slice().reverse(); // oldest -> newest
-
     return ordered
       .map((r) => {
         const pts = toNum(r?.pts);
@@ -722,7 +715,6 @@
     const minV = Math.min(...values);
     const maxV = Math.max(...values);
 
-    // Expand bounds to include prop line so the overlay is always visible
     const min = (line !== null && Number.isFinite(line)) ? Math.min(minV, line) : minV;
     const max = (line !== null && Number.isFinite(line)) ? Math.max(maxV, line) : maxV;
 
@@ -775,16 +767,12 @@
       .map((p) => `<circle cx="${p[0].toFixed(2)}" cy="${p[1].toFixed(2)}" r="2.8" fill="rgba(0,255,180,0.85)" />`)
       .join("");
 
-    // Prop line overlay + shading
     let propOverlay = "";
     if (line !== null && Number.isFinite(line)) {
       const yLine = padT + (1 - (line - min) / span) * innerH;
 
-      // “Hit zone” shading (over = above line is hit; under = below line is hit)
       const hitY = mode === "over" ? padT : yLine;
       const hitH = mode === "over" ? (yLine - padT) : (padT + innerH - yLine);
-
-      // If hitH is negative due to bounds, clamp
       const safeHitH = Math.max(0, hitH);
 
       propOverlay = `
@@ -850,7 +838,6 @@
   function defaultLineFor(values) {
     if (!values || !values.length) return null;
     const avg = values.reduce((a, b) => a + b, 0) / values.length;
-    // Default to a “sportsbook-ish” 0.5 increment
     return Math.round(avg * 2) / 2;
   }
 
@@ -861,47 +848,94 @@
     const hit = (propLine !== null) ? hitRate(values, propLine, propMode) : null;
 
     container.innerHTML = `
-      <div style="width:100%;">
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; flex-wrap:wrap;">
-          <div style="font-size:.82rem; letter-spacing:.12em; text-transform:uppercase; opacity:.88;">
+      <div style="width:100%; box-sizing:border-box;">
+        <div style="
+          display:grid;
+          grid-template-columns: 1fr auto;
+          align-items:center;
+          gap:10px;
+          margin-bottom:10px;
+        ">
+          <div style="font-size:.82rem; letter-spacing:.12em; text-transform:uppercase; opacity:.88; min-width:0;">
             ${statLabel} · ${tabLabel} Trend
           </div>
 
-          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <div style="
+            display:flex;
+            align-items:center;
+            justify-content:flex-end;
+            gap:8px;
+            flex-wrap:wrap;
+            max-width: 100%;
+          ">
             <button type="button" id="pp-mode-over"
-              style="padding:4px 10px; border-radius:999px; border:1px solid rgba(0,255,180,0.35); background:${propMode === "over" ? "rgba(0,255,180,0.14)" : "rgba(10,10,24,0.65)"}; color:#f7f7ff; font-size:11px; letter-spacing:.08em; text-transform:uppercase; cursor:pointer;">
+              style="
+                height:28px;
+                padding:0 10px;
+                border-radius:999px;
+                border:1px solid rgba(0,255,180,0.35);
+                background:${propMode === "over" ? "rgba(0,255,180,0.14)" : "rgba(10,10,24,0.65)"};
+                color:#f7f7ff;
+                font-size:11px;
+                letter-spacing:.08em;
+                text-transform:uppercase;
+                cursor:pointer;
+                white-space:nowrap;
+              ">
               Over
             </button>
+
             <button type="button" id="pp-mode-under"
-              style="padding:4px 10px; border-radius:999px; border:1px solid rgba(0,120,255,0.35); background:${propMode === "under" ? "rgba(0,120,255,0.14)" : "rgba(10,10,24,0.65)"}; color:#f7f7ff; font-size:11px; letter-spacing:.08em; text-transform:uppercase; cursor:pointer;">
+              style="
+                height:28px;
+                padding:0 10px;
+                border-radius:999px;
+                border:1px solid rgba(0,120,255,0.35);
+                background:${propMode === "under" ? "rgba(0,120,255,0.14)" : "rgba(10,10,24,0.65)"};
+                color:#f7f7ff;
+                font-size:11px;
+                letter-spacing:.08em;
+                text-transform:uppercase;
+                cursor:pointer;
+                white-space:nowrap;
+              ">
               Under
             </button>
 
-            <div style="display:flex; align-items:center; gap:6px;">
-              <span style="font-size:11px; opacity:.75; letter-spacing:.08em; text-transform:uppercase;">Line</span>
+            <div style="display:flex; align-items:center; gap:6px; height:28px;">
+              <span style="font-size:11px; opacity:.75; letter-spacing:.08em; text-transform:uppercase; white-space:nowrap;">Line</span>
               <input id="pp-line-input" type="number" step="0.5" value="${propLine !== null ? propLine : ""}"
-                style="width:74px; padding:4px 8px; border-radius:10px; border:1px solid rgba(255,215,0,0.35); background:rgba(0,0,0,0.25); color:#f7f7ff; outline:none;" />
+                style="
+                  height:28px;
+                  width:78px;
+                  padding:0 10px;
+                  border-radius:12px;
+                  border:1px solid rgba(255,215,0,0.35);
+                  background:rgba(0,0,0,0.25);
+                  color:#f7f7ff;
+                  outline:none;
+                  box-sizing:border-box;
+                " />
             </div>
 
-            <div style="font-size:11px; opacity:.78; white-space:nowrap;">
-              Hit rate: <span style="opacity:1;">${hit !== null ? hit + "%" : "—"}</span>
+            <div style="font-size:11px; opacity:.78; white-space:nowrap; height:28px; display:flex; align-items:center;">
+              Hit rate: <span style="opacity:1; margin-left:4px;">${hit !== null ? hit + "%" : "—"}</span>
             </div>
           </div>
         </div>
 
-        <div style="font-size:.72rem; opacity:.72; line-height:1.35; margin-bottom:8px;">
+        <div style="font-size:.72rem; opacity:.72; line-height:1.35; margin-bottom:10px;">
           Opponent context (placeholder): pace / matchup / role will render here.
         </div>
 
         <div id="pp-chart-svg"></div>
 
-        <div style="margin-top:8px; font-size:.72rem; opacity:.72; line-height:1.35;">
+        <div style="margin-top:10px; font-size:.72rem; opacity:.72; line-height:1.35;">
           Next upgrade: opponent-specific splits + minutes/usage context + bet-ready line suggestions.
         </div>
       </div>
     `;
 
-    // Wire controls
     const overBtn = container.querySelector("#pp-mode-over");
     const underBtn = container.querySelector("#pp-mode-under");
     const lineInput = container.querySelector("#pp-line-input");
@@ -944,7 +978,6 @@
     const windowN = windowSizeForTab(currentTab);
     const sliced = rows.slice(0, Math.max(windowN, 5));
 
-    // Sparklines
     const sparkRows = rows.slice(0, 12);
     const sparkKeys = ["pts", "reb", "ast", "pra", "fg3m"];
     const sparkHosts = sparkTargets();
@@ -956,16 +989,13 @@
       });
     }
 
-    // Main chart
     const mainVals = seriesForKey(sliced, primaryStatKey);
     const statLabel = statLabelFromKey(primaryStatKey);
     const tabLabel = currentTabLabelShort();
 
-    // Size to container
     const rect = main.getBoundingClientRect ? main.getBoundingClientRect() : null;
     const w = rect && rect.width ? Math.max(520, Math.floor(rect.width)) : 640;
 
-    // Render controls + wrapper
     renderPropControls(main, statLabel, tabLabel, mainVals);
 
     const svgHost = main.querySelector("#pp-chart-svg");
@@ -980,39 +1010,11 @@
   }
 
   // ---------------------------
-  // View entry
+  // Boot + API entry
   // ---------------------------
 
-  function openPlayersForGame(gameLabel) {
-    switchToPlayersView();
-
-    const gameCtx = document.getElementById("players-game-context");
-    if (gameCtx) gameCtx.textContent = gameLabel || "Game selected.";
-
-    currentPlayer = null;
-    propLine = null;
-    propMode = "over";
-
-    const titleEl = document.getElementById("player-card-title");
-    if (titleEl) titleEl.textContent = "No player selected";
-
-    applySubtitle(currentTab, currentPlayer, false);
-    setStatValuesFromObject({});
-    primaryStatKey = "pra";
-    setPrimaryStat(primaryStatKey);
-    syncAddSlipButtonDisabled();
-
-    ensureTabsInitialized();
-    wireStatRows();
-    updateTabActiveClasses();
-
-    renderChartPlaceholders();
-    renderDemoPlayers(gameLabel);
-  }
-
-  // Boot
   document.addEventListener("DOMContentLoaded", initPlayerViewPlaceholders);
+
   window.PropsParlor = window.PropsParlor || {};
   window.PropsParlor.openPlayersForGame = openPlayersForGame;
 })();
-
