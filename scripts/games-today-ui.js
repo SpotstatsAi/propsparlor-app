@@ -1,11 +1,12 @@
 // scripts/games-today-ui.js
-// Wires the "Today's Games" view to /api/games/today without touching layout.
+// Wires the "Today's Games" view to /api/stats/games-today without touching layout.
 
 (function () {
-  const API_BASE = "/api";
+  // Use the existing Worker route: /api/stats/games-today
+  const GAMES_TODAY_URL = "/api/stats/games-today";
 
   async function fetchGamesToday() {
-    const res = await fetch(`${API_BASE}/games/today`, {
+    const res = await fetch(GAMES_TODAY_URL, {
       headers: { Accept: "application/json" },
     });
 
@@ -134,9 +135,8 @@
     }
   }
 
-  // Expose a single init function for main.js to call.
+  // Called from main.js
   window.initGamesToday = function initGamesToday() {
-    // If the DOM elements don't exist, just bail quietly.
     if (
       !getEl("games-today-loading") ||
       !getEl("games-today-error") ||
