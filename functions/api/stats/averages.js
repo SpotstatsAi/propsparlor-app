@@ -2,7 +2,7 @@
 // Route: GET /api/stats/averages?player_id=237&season=2024
 //
 // Fetches current-season game logs from BallDontLie
-// and computes per-game averages.
+// and computes per-game averages with 1-decimal rounding.
 
 function jsonResponse(body, init = {}) {
   return new Response(JSON.stringify(body), {
@@ -15,14 +15,16 @@ function error(status, code, message) {
   return jsonResponse({ ok: false, error: { code, message } }, { status });
 }
 
-// Convert BDL "min" field like "32:45" to decimal minutes (32.75)
+// Convert "32:45" → 32.75
 function parseMinutes(minStr) {
   if (!minStr || typeof minStr !== "string") return 0;
-  const parts = minStr.split(":");
-  const m = Number(parts[0] || 0);
-  const s = Number(parts[1] || 0);
-  if (!Number.isFinite(m) || !Number.isFinite(s)) return 0;
-  return m + s / 60;
+  const [m, s] = minStr.split(":").map(Number);
+  return m + (s || 0) / 60;
+}
+
+// Round to 1 decimal but keep numeric
+function r1(x) {
+  return Number(x.toFixed(1));
 }
 
 export async function onRequest({ request, env }) {
@@ -34,9 +36,7 @@ export async function onRequest({ request, env }) {
   if (!season) return error(400, "BAD_REQUEST", "`season` is required.");
 
   const apiKey = env.BDL_API_KEY;
-  if (!apiKey) {
-    return error(500, "NO_API_KEY", "BDL_API_KEY is not configured.");
-  }
+  if (!apiKey) return error(500, "NO_API_KEY", "BDL_API_KEY is not configured.");
 
   const bdlUrl =
     `https://api.balldontlie.io/v1/stats` +
@@ -52,7 +52,7 @@ export async function onRequest({ request, env }) {
         Authorization: `Bearer ${apiKey}`
       }
     });
-  } catch (e) {
+  } catch {
     return error(502, "BDL_FETCH_FAILED", "Failed to reach BallDontLie.");
   }
 
@@ -63,7 +63,7 @@ export async function onRequest({ request, env }) {
   let json;
   try {
     json = await res.json();
-  } catch (e) {
+  } catch {
     return error(502, "BDL_PARSE_ERROR", "Could not parse BallDontLie JSON.");
   }
 
@@ -71,7 +71,6 @@ export async function onRequest({ request, env }) {
   const n = games.length;
 
   if (n === 0) {
-    // No games yet this season; not an error, just no data.
     return jsonResponse({
       ok: true,
       player_id: Number(playerId),
@@ -82,18 +81,8 @@ export async function onRequest({ request, env }) {
     });
   }
 
-  let sumPts = 0,
-    sumReb = 0,
-    sumAst = 0,
-    sumStl = 0,
-    sumBlk = 0,
-    sumTov = 0;
-  let sumFgm = 0,
-    sumFga = 0,
-    sumFg3m = 0,
-    sumFg3a = 0,
-    sumFtm = 0,
-    sumFta = 0;
+  let sumPts = 0, sumReb = 0, sumAst = 0, sumStl = 0, sumBlk = 0, sumTov = 0;
+  let sumFgm = 0, sumFga = 0, sumFg3m = 0, sumFg3a = 0, sumFtm = 0, sumFta = 0;
   let sumMinutes = 0;
 
   for (const g of games) {
@@ -116,18 +105,20 @@ export async function onRequest({ request, env }) {
 
   const averages = {
     games_played: n,
-    pts: sumPts / n,
-    reb: sumReb / n,
-    ast: sumAst / n,
-    stl: sumStl / n,
-    blk: sumBlk / n,
-    tov: sumTov / n,
-    pra: (sumPts + sumReb + sumAst) / n,
-    minutes: sumMinutes / n,
 
-    fg_pct: sumFga === 0 ? 0 : sumFgm / sumFga,
-    fg3_pct: sumFg3a === 0 ? 0 : sumFg3m / sumFg3a,
-    ft_pct: sumFta === 0 ? 0 : sumFtm / sumFta
+    pts: r1(sumPts / n),
+    reb: r1(sumReb / n),
+    ast: r1(sumAst / n),
+    stl: r1(sumStl / n),
+    blk: r1(sumBlk / n),
+    tov: r1(sumTov / n),
+
+    pra: r1((sumPts + sumReb + sumAst) / n),
+    minutes: r1(sumMinutes / n),
+
+    fg_pct: r1(sumFga === 0 ? 0 : sumFgm / sumFga),
+    fg3_pct: r1(sumFg3a === 0 ? 0 : sumFg3m / sumFg3a),
+    ft_pct: r1(sumFta === 0 ? 0 : sumFtm / sumFta)
   };
 
   return jsonResponse({
