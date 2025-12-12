@@ -943,23 +943,10 @@ button {
   }
 }
 
-/* Thread 7 — Charts alignment / overlap fix (minimal + safe) */
+/* Thread 7 — Charts containment (refined, no text clipping) */
 #player-main-chart {
   position: relative;
-  overflow: hidden;          /* stops any chart overlays from spilling upward */
-  isolation: isolate;        /* creates a clean stacking context */
-}
-
-#player-sparklines {
-  position: relative;
-  z-index: 2;                /* keep sparks above any chart glow/overlays */
-}
-
-#player-sparklines .status-item {
-  overflow: hidden;          /* prevents text/svg/overlays from escaping cards */
-}
-
-#player-sparklines svg,
-#player-main-chart svg {
-  display: block;            /* removes baseline/inline svg alignment drift */
+  overflow-x: hidden;
+  overflow-y: visible;   /* allow footer text to breathe */
+  isolation: isolate;
 }
