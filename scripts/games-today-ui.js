@@ -1,7 +1,6 @@
 // propsparlor-app/scripts/games-today-ui.js
-// Today’s Games UI: renders the slate table and wires Players & Stats -> Players view.
-// Fixes: (1) ensures CTA uses .games-table-cta styling (no white default buttons)
-//        (2) cleans tipoff rendering so you don't see duplicated timestamps
+// Today's Games UI renderer.
+// Fixes the regression where Tipoff showed TWO timestamps and CTA buttons rendered white/default.
 
 (function () {
   const ENDPOINT = "/api/stats/games-today";
@@ -15,52 +14,11 @@
     el.style.display = yes ? "" : "none";
   }
 
-  function safeText(v, fallback = "—") {
-    const s = (v ?? "").toString().trim();
-    return s.length ? s : fallback;
-  }
-
-  function parseDate(val) {
-    if (!val) return null;
-    const d = new Date(val);
-    return Number.isNaN(d.getTime()) ? null : d;
-  }
-
-  function formatTipoff(game) {
-    // Prefer a single actual start time if present
-    const candidates = [
-      game?.date,
-      game?.start_time,
-      game?.startTime,
-      game?.scheduled,
-      game?.tipoff,
-      game?.tipoff_time,
-    ];
-
-    for (const c of candidates) {
-      const d = parseDate(c);
-      if (!d) continue;
-
-      // Format: "Dec 12, 7:30 PM" (local)
-      return d.toLocaleString(undefined, {
-        month: "short",
-        day: "2-digit",
-        hour: "numeric",
-        minute: "2-digit",
-      });
-    }
-
-    return "TBD";
-  }
-
-  function formatStatus(game) {
-    // Keep simple: if API gives a status string, show it; else TBD.
-    const candidates = [game?.status, game?.game_status, game?.state];
-    for (const c of candidates) {
-      const s = (c ?? "").toString().trim();
-      if (s) return s;
-    }
-    return "TBD";
+  function isLikelyISODateString(value) {
+    if (!value) return false;
+    const s = String(value).trim();
+    // quick heuristic: ISO-looking with 'T' and 'Z'
+    return s.includes("T") && s.endsWith("Z") && s.length >= 16;
   }
 
   function matchupLabel(game) {
@@ -78,11 +36,62 @@
     return `${away} @ ${home}`;
   }
 
+  function pickFirstDate(game) {
+    // Choose ONE best date/time field only (no concatenation).
+    const candidates = [
+      game?.start_time,
+      game?.startTime,
+      game?.scheduled,
+      game?.date,
+      game?.tipoff,
+      game?.tipoff_time,
+    ];
+
+    for (const c of candidates) {
+      if (!c) continue;
+      const d = new Date(c);
+      if (!Number.isNaN(d.getTime())) return d;
+    }
+
+    return null;
+  }
+
+  function formatTipoff(game) {
+    const d = pickFirstDate(game);
+    if (!d) return "TBD";
+
+    // Clean, readable local time (prevents ugly ISO strings)
+    return d.toLocaleString(undefined, {
+      month: "short",
+      day: "2-digit",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }
+
+  function formatStatus(game) {
+    // Prefer true status fields if present
+    const candidates = [game?.status, game?.game_status, game?.state];
+
+    for (const c of candidates) {
+      if (!c) continue;
+      const s = String(c).trim();
+      if (!s) continue;
+
+      // If backend accidentally put a date into status, treat as TBD
+      if (isLikelyISODateString(s)) return "TBD";
+
+      return s;
+    }
+
+    return "TBD";
+  }
+
   function buildCTA(matchup) {
     const btn = document.createElement("button");
     btn.type = "button";
 
-    // CRITICAL: this is what prevents the white default button
+    // CRITICAL: ensures neon styling (prevents white/default button)
     btn.className = "games-table-cta";
 
     btn.textContent = "Players & Stats";
@@ -108,13 +117,14 @@
     const status = formatStatus(game);
 
     const tdMatchup = document.createElement("td");
-    tdMatchup.textContent = safeText(matchup);
+    tdMatchup.textContent = matchup;
 
     const tdTipoff = document.createElement("td");
-    tdTipoff.textContent = safeText(tipoff);
+    // FIX: tipoff is ONE formatted value only (no concatenation)
+    tdTipoff.textContent = tipoff;
 
     const tdStatus = document.createElement("td");
-    tdStatus.textContent = safeText(status);
+    tdStatus.textContent = status;
 
     const tdCTA = document.createElement("td");
     tdCTA.style.textAlign = "right";
@@ -147,7 +157,7 @@
       const json = await res.json().catch(() => null);
 
       if (!res.ok || !json || json.ok === false) {
-        console.error("games-today upstream error", res.status, json);
+        console.error("games-today error", res.status, json);
         show(loading, false);
         show(error, true);
         return;
@@ -168,7 +178,7 @@
       show(loading, false);
       show(wrapper, true);
     } catch (e) {
-      console.error("games-today fetch failed", e);
+      console.error("Failed to load games today", e);
       show(loading, false);
       show(error, true);
     }
