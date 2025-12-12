@@ -454,3 +454,40 @@ body {
     display: none;
   }
 }
+
+/* -----------------------------------------------------
+   LINK BUTTON — for "View props / stats"
+   ----------------------------------------------------- */
+.link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  font-weight: 500;
+
+  color: #d5e6ff;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(0, 180, 255, 0.45);
+  border-radius: 6px;
+
+  cursor: pointer;
+  transition: all 0.18s ease;
+  white-space: nowrap;
+
+  backdrop-filter: blur(4px);
+}
+
+.link-button:hover {
+  color: #ffffff;
+  border-color: rgba(0, 200, 255, 0.75);
+  background: rgba(0, 40, 80, 0.55);
+  box-shadow: 0 0 10px rgba(0, 200, 255, 0.45);
+}
+
+.link-button:active {
+  transform: scale(0.96);
+  box-shadow: 0 0 4px rgba(0, 200, 255, 0.4);
+}
+
