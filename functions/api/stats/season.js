@@ -1,151 +1,162 @@
-// functions/api/stats/season.js
-// NBA season averages via BALLDONTLIE v1 Season Averages (general / base).
+// propsparlor-app/functions/api/stats/season.js
+// Returns core season averages for a player.
+// Contract (frontend expects):
+// { ok: true, data: { player_id, season, pts, reb, ast, pra, fg3m } }
 
-export async function onRequestGet(context) {
-  const { request, env } = context;
-  const url = new URL(request.url);
+function jsonResponse(payload, status = 200) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store",
+    },
+  });
+}
 
-  const playerId = url.searchParams.get("player_id");
-  if (!playerId) {
-    return new Response(
-      JSON.stringify({ ok: false, error: "player_id is required" }),
-      {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      }
-    );
+function toNumber(value) {
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function round1(n) {
+  return Number.isFinite(n) ? Math.round(n * 10) / 10 : null;
+}
+
+function firstNonNull(...vals) {
+  for (const v of vals) {
+    if (v !== null && v !== undefined) return v;
   }
+  return null;
+}
 
-  const apiKey = env.BDL_API_KEY;
-  if (!apiKey) {
-    return new Response(
-      JSON.stringify({ ok: false, error: "BDL_API_KEY missing in env" }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      }
-    );
-  }
-
-  // BDL uses the season *year* (e.g. 2024 for the 2023-24 season).
-  // This matches what you were using before: currentYear - 1.
-  const season = new Date().getFullYear() - 1;
-  const seasonType = "regular";
-  const category = "general";
-  const type = "base";
-
-  // Build the Season Averages URL per docs:
-  // https://api.balldontlie.io/v1/season_averages/general?season=2024&season_type=regular&type=base&player_ids[]=246
-  const apiUrl = new URL(
-    `https://api.balldontlie.io/v1/season_averages/${category}`
-  );
-  apiUrl.searchParams.set("season", String(season));
-  apiUrl.searchParams.set("season_type", seasonType);
-  apiUrl.searchParams.set("type", type);
-  apiUrl.searchParams.append("player_ids[]", String(playerId));
-
+export async function onRequestGet({ request, env }) {
   try {
-    const res = await fetch(apiUrl.toString(), {
+    if (!env || !env.BDL_API_KEY) {
+      return jsonResponse(
+        { ok: false, error: { code: "CONFIG", message: "Missing env.BDL_API_KEY" } },
+        500
+      );
+    }
+
+    const url = new URL(request.url);
+
+    // Accept both player_id and playerId for safety
+    const playerIdRaw =
+      url.searchParams.get("player_id") ||
+      url.searchParams.get("playerId") ||
+      url.searchParams.get("id");
+
+    const player_id = Number(playerIdRaw);
+    if (!Number.isFinite(player_id)) {
+      return jsonResponse(
+        { ok: false, error: { code: "BAD_REQUEST", message: "player_id is required" } },
+        400
+      );
+    }
+
+    // Default to current season year (calendar year heuristic),
+    // but allow explicit override via ?season=YYYY
+    const seasonRaw = url.searchParams.get("season");
+    const now = new Date();
+    const defaultSeason = now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1;
+    const season = Number(seasonRaw ?? defaultSeason);
+
+    // BDL v2 season stats endpoint (NBA)
+    // Uses array params: player_ids[]=X and seasons[]=YYYY
+    const upstream = new URL("https://api.balldontlie.io/v2/stats/season");
+    upstream.searchParams.append("player_ids[]", String(player_id));
+    upstream.searchParams.append("seasons[]", String(season));
+    upstream.searchParams.append("postseason", "false");
+
+    const res = await fetch(upstream.toString(), {
       headers: {
-        // Per docs: Authorization: YOUR_API_KEY (no Bearer)
-        // https://nba.balldontlie.io/  → Authentication section
-        Authorization: apiKey,
+        Authorization: env.BDL_API_KEY,
         Accept: "application/json",
       },
     });
 
-    let json;
+    const text = await res.text();
+    let data;
     try {
-      json = await res.json();
-    } catch (e) {
-      console.error("season.js: failed to parse JSON", e);
-      json = null;
+      data = JSON.parse(text);
+    } catch {
+      data = null;
     }
 
-    if (!res.ok) {
-      console.error("BDL season_averages error", res.status, json);
+    if (!res.ok || !data) {
+      return jsonResponse(
+        {
+          ok: false,
+          error: {
+            code: "UPSTREAM_ERROR",
+            message: `BDL returned ${res.status}`,
+            details: data || text,
+          },
+        },
+        502
+      );
     }
 
-    const row = json?.data?.[0] || null;
-    const stats = row?.stats || {};
+    // BDL typically returns { data: [ ... ] }
+    const row = Array.isArray(data.data) ? data.data[0] : null;
 
-    const toNumberOrNull = (value) => {
-      if (value === null || value === undefined) return null;
-      const num = typeof value === "number" ? value : Number(value);
-      if (Number.isNaN(num)) return null;
-      return Number(num.toFixed(1)); // 1 decimal place, like you asked
-    };
-
-    const pickStat = (keys) => {
-      for (const key of keys) {
-        if (stats[key] !== undefined && stats[key] !== null) {
-          return toNumberOrNull(stats[key]);
-        }
-      }
-      return null;
-    };
-
-    // Try multiple possible field names so we’re robust to naming
-    const pts = pickStat(["pts", "points"]);
-    const reb = pickStat(["reb", "rebounds"]);
-    const ast = pickStat(["ast", "assists"]);
-    const fg3m = pickStat([
-      "fg3m",
-      "three_pointers_made",
-      "three_point_field_goals_made",
-      "3pm",
-    ]);
-
-    let pra = null;
-    if (pts !== null && reb !== null && ast !== null) {
-      pra = Number((pts + reb + ast).toFixed(1));
+    if (!row) {
+      return jsonResponse(
+        {
+          ok: false,
+          error: {
+            code: "NO_DATA",
+            message: "No season stats returned for this player/season.",
+          },
+        },
+        404
+      );
     }
 
-    const payload = {
+    // Normalize fields (BDL naming can vary by product/version)
+    const pts = toNumber(firstNonNull(row.pts, row.points, row.pts_pg, row.points_per_game));
+    const reb = toNumber(firstNonNull(row.reb, row.rebounds, row.reb_pg, row.rebounds_per_game));
+    const ast = toNumber(firstNonNull(row.ast, row.assists, row.ast_pg, row.assists_per_game));
+
+    // 3PM (fg3m is common)
+    const fg3m = toNumber(
+      firstNonNull(
+        row.fg3m,
+        row.fg3m_pg,
+        row.three_pm,
+        row.three_pt_made,
+        row.three_pt_made_pg,
+        row.three_pointers_made
+      )
+    );
+
+    // PRA is computed (never rely on upstream naming)
+    const pra =
+      pts !== null && reb !== null && ast !== null ? pts + reb + ast : null;
+
+    // IMPORTANT: keep the exact flat contract your UI expects
+    return jsonResponse({
       ok: true,
-      season,
-      season_type: seasonType,
-      category,
-      type,
-      player_id: Number(playerId),
-      raw: row || null, // helpful while we’re validating, can remove later
-      averages: {
-        pts,
-        reb,
-        ast,
-        pra,
-        fg3m,
+      data: {
+        player_id,
+        season,
+        pts: round1(pts),
+        reb: round1(reb),
+        ast: round1(ast),
+        pra: round1(pra),
+        fg3m: round1(fg3m),
       },
-    };
-
-    return new Response(JSON.stringify(payload), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
     });
   } catch (err) {
-    console.error("season.js exception:", err);
-
-    // Still respond ok:true so the UI just shows "—" instead of the red error line.
-    const fallback = {
-      ok: true,
-      season,
-      season_type: "regular",
-      category: "general",
-      type: "base",
-      player_id: Number(playerId),
-      raw: null,
-      averages: {
-        pts: null,
-        reb: null,
-        ast: null,
-        pra: null,
-        fg3m: null,
+    return jsonResponse(
+      {
+        ok: false,
+        error: {
+          code: "SERVER_ERROR",
+          message: err?.message || "Unhandled error",
+        },
       },
-    };
-
-    return new Response(JSON.stringify(fallback), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+      500
+    );
   }
 }
