@@ -1,8 +1,10 @@
 // scripts/players-ui.js
-// Thread 7 – Players view: game context + demo player list + live season stats card.
+// Thread 7 – Players view: game context + demo player list +
+// tabbed Season / Last 10 / Last 5 stats card.
 
 (function () {
   const SEASON_API_URL = "/api/stats/season";
+  const AVERAGES_API_URL = "/api/stats/averages";
 
   // Demo players to prove the full flow.
   // bdlId values match BallDontLie player IDs.
@@ -14,6 +16,11 @@
     { key: "demo-curry",   name: "Stephen Curry",          team: "GSW", position: "G",   bdlId: 115 },
     { key: "demo-giannis", name: "Giannis Antetokounmpo",  team: "MIL", position: "F",   bdlId: 15  },
   ];
+
+  // State and cache
+  let currentPlayer = null;
+  let currentTab = "season"; // "season" | "last10" | "last5"
+  const statsCache = Object.create(null); // key: `${playerId}:${tab}`
 
   function initPlayerViewPlaceholders() {
     const gameCtx = document.getElementById("players-game-context");
@@ -35,6 +42,8 @@
       subtitleEl.textContent =
         "Select a player from the list above. We'll show their season averages here once the backend is wired.";
     }
+
+    ensureTabsInitialized();
   }
 
   function switchToPlayersView() {
@@ -53,13 +62,72 @@
     });
   }
 
+  // ---------- Tabs + card helpers ----------
+
+  function ensureTabsInitialized() {
+    const cardShell = document.querySelector(".player-card-shell");
+    if (!cardShell || cardShell.dataset.tabsInitialized === "true") return;
+
+    const statsGrid = cardShell.querySelector(".player-stats-grid");
+    if (!statsGrid) return;
+
+    const tabs = document.createElement("div");
+    tabs.className = "player-tabs";
+    // inline styles so we don't have to touch main.css
+    tabs.style.display = "flex";
+    tabs.style.gap = "6px";
+    tabs.style.marginTop = "4px";
+    tabs.style.marginBottom = "4px";
+
+    const config = [
+      { id: "season", label: "Season" },
+      { id: "last10", label: "Last 10" },
+      { id: "last5", label: "Last 5" },
+    ];
+
+    config.forEach((tabCfg, idx) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      // reuse pill styling so it matches your aesthetic
+      btn.className = "player-pill player-tab";
+      btn.dataset.tabId = tabCfg.id;
+      btn.textContent = tabCfg.label;
+
+      if (idx === 0) {
+        btn.classList.add("player-pill-active");
+      }
+
+      btn.addEventListener("click", () => {
+        onTabClick(tabCfg.id);
+      });
+
+      tabs.appendChild(btn);
+    });
+
+    cardShell.insertBefore(tabs, statsGrid);
+    cardShell.dataset.tabsInitialized = "true";
+  }
+
+  function updateTabActiveClasses() {
+    const tabButtons = document.querySelectorAll(".player-tab");
+    tabButtons.forEach((btn) => {
+      const id = btn.dataset.tabId;
+      if (id === currentTab) {
+        btn.classList.add("player-pill-active");
+      } else {
+        btn.classList.remove("player-pill-active");
+      }
+    });
+  }
+
   function setStatValuesFromObject(statsObj) {
     const statEls = document.querySelectorAll(".player-stat-value");
     statEls.forEach((el) => {
       const key = el.dataset.statKey;
-      let raw = statsObj && Object.prototype.hasOwnProperty.call(statsObj, key)
-        ? statsObj[key]
-        : null;
+      let raw =
+        statsObj && Object.prototype.hasOwnProperty.call(statsObj, key)
+          ? statsObj[key]
+          : null;
 
       if (raw === null || raw === undefined || raw === "" || Number.isNaN(raw)) {
         el.textContent = "—";
@@ -93,81 +161,138 @@
     return pts + reb + ast;
   }
 
-  async function loadSeasonStatsForPlayer(player) {
-    const titleEl = document.getElementById("player-card-title");
-    const subtitleEl = document.getElementById("player-card-subtitle");
-
-    if (titleEl) {
-      titleEl.textContent = player.name;
-    }
-    if (subtitleEl) {
-      subtitleEl.textContent = `Loading season averages for ${player.name} (${player.team} · ${player.position})…`;
+  function subtitleForTab(tab, player, isLoading) {
+    if (!player) {
+      return "Select a player from the list above.";
     }
 
-    // Set temporary placeholders while loading
-    setStatValuesFromObject({ pts: "—", reb: "—", ast: "—", pra: "—", fg3m: "—" });
-
-    if (!player.bdlId) {
-      if (subtitleEl) {
-        subtitleEl.textContent =
-          `No BallDontLie ID mapped for ${player.name} yet. Stats will be added once mapping is configured.`;
+    const base = `${player.name} (${player.team} · ${player.position})`;
+    if (isLoading) {
+      if (tab === "season") {
+        return `Loading season averages for ${base}…`;
       }
+      if (tab === "last10") {
+        return `Loading last 10 games averages for ${base}…`;
+      }
+      if (tab === "last5") {
+        return `Loading last 5 games averages for ${base}…`;
+      }
+    } else {
+      if (tab === "season") {
+        return `Season averages for ${base}.`;
+      }
+      if (tab === "last10") {
+        return `Last 10 games averages for ${base}.`;
+      }
+      if (tab === "last5") {
+        return `Last 5 games averages for ${base}.`;
+      }
+    }
+    return "";
+  }
+
+  function applySubtitle(tab, player, isLoading) {
+    const subtitleEl = document.getElementById("player-card-subtitle");
+    if (!subtitleEl) return;
+    subtitleEl.textContent = subtitleForTab(tab, player, isLoading);
+  }
+
+  async function fetchStatsForTab(playerId, tab) {
+    const cacheKey = `${playerId}:${tab}`;
+    if (statsCache[cacheKey]) {
+      return statsCache[cacheKey];
+    }
+
+    let url;
+    if (tab === "season") {
+      url = `${SEASON_API_URL}?player_id=${encodeURIComponent(playerId)}`;
+    } else if (tab === "last10") {
+      url =
+        `${AVERAGES_API_URL}?player_id=${encodeURIComponent(playerId)}` +
+        `&window=10`;
+    } else if (tab === "last5") {
+      url =
+        `${AVERAGES_API_URL}?player_id=${encodeURIComponent(playerId)}` +
+        `&window=5`;
+    } else {
+      return null;
+    }
+
+    const res = await fetch(url, { headers: { Accept: "application/json" } });
+    const payload = await res.json().catch(() => null);
+
+    if (!res.ok || !payload || payload.ok === false) {
+      console.error("Stats API error for tab", tab, res.status, payload);
+      return null;
+    }
+
+    // Be defensive about shapes: { averages }, { data: { averages } }, etc.
+    let data =
+      payload.averages ||
+      payload.data?.averages ||
+      payload.data ||
+      payload.stats ||
+      payload;
+
+    const averages =
+      data?.averages || data?.stats || data || {};
+
+    const pts = toNum(averages.pts ?? averages.points);
+    const reb = toNum(averages.reb ?? averages.trb ?? averages.rebounds);
+    const ast = toNum(averages.ast ?? averages.assists);
+    const pra = derivePra(averages);
+    const fg3m = toNum(
+      averages.fg3m ??
+        averages.threes ??
+        averages.three_pointers_made ??
+        averages["3pm"]
+    );
+
+    const finalStats = { pts, reb, ast, pra, fg3m };
+
+    statsCache[cacheKey] = finalStats;
+    return finalStats;
+  }
+
+  async function renderTabStats(tab) {
+    if (!currentPlayer || !currentPlayer.bdlId) {
+      setStatValuesFromObject({});
+      applySubtitle(tab, currentPlayer, false);
       return;
     }
 
+    applySubtitle(tab, currentPlayer, true);
+    // show placeholders while loading
+    setStatValuesFromObject({ pts: "—", reb: "—", ast: "—", pra: "—", fg3m: "—" });
+
     try {
-      const url = `${SEASON_API_URL}?player_id=${encodeURIComponent(player.bdlId)}`;
-      const res = await fetch(url, { headers: { Accept: "application/json" } });
-
-      if (!res.ok) {
-        throw new Error(`Non-200 from /api/stats/season: ${res.status}`);
+      const stats = await fetchStatsForTab(currentPlayer.bdlId, tab);
+      if (!stats) {
+        // leave the placeholders but don't show the "unable to load" hard error
+        applySubtitle(tab, currentPlayer, false);
+        return;
       }
-
-      const payload = await res.json();
-      if (payload && payload.ok === false) {
-        throw new Error(
-          payload.error && payload.error.message
-            ? payload.error.message
-            : "API returned error"
-        );
-      }
-
-      // Try to be defensive about response shape.
-      const data = payload && (payload.data || payload.stats || payload.averages || payload);
-      const averages =
-        (data && (data.averages || data.season || data)) || {};
-
-      const pts = toNum(averages.pts ?? averages.points);
-      const reb = toNum(averages.reb ?? averages.trb ?? averages.rebounds);
-      const ast = toNum(averages.ast ?? averages.assists);
-      const pra = derivePra(averages);
-      const fg3m = toNum(averages.fg3m ?? averages.threes ?? averages["3pm"]);
-
-      const finalStats = {
-        pts: pts,
-        reb: reb,
-        ast: ast,
-        pra: pra,
-        fg3m: fg3m,
-      };
-
-      setStatValuesFromObject(finalStats);
-
-      if (subtitleEl) {
-        const seasonLabel =
-          (data && (data.season_label || data.season)) || "Current Season";
-        subtitleEl.textContent =
-          `Season averages for ${player.name} (${player.team} · ${player.position}) — ${seasonLabel}.`;
-      }
+      setStatValuesFromObject(stats);
+      applySubtitle(tab, currentPlayer, false);
     } catch (err) {
-      console.error("Failed to load season stats for player:", err);
-      if (subtitleEl) {
-        subtitleEl.textContent =
-          "Unable to load season stats right now. Please try again in a moment.";
-      }
-      // Leave placeholders as "—"
+      console.error("Failed to load stats for tab", tab, err);
+      applySubtitle(tab, currentPlayer, false);
+      // placeholders stay as "—"
     }
   }
+
+  function onTabClick(tabId) {
+    if (!currentPlayer) {
+      currentTab = tabId;
+      updateTabActiveClasses();
+      return;
+    }
+    currentTab = tabId;
+    updateTabActiveClasses();
+    renderTabStats(currentTab);
+  }
+
+  // ---------- Player list + click wiring ----------
 
   function renderDemoPlayers(gameLabel) {
     const introEl = document.getElementById("players-list-intro");
@@ -189,14 +314,26 @@
       btn.textContent = `${player.name} · ${player.team}`;
 
       btn.addEventListener("click", () => {
-        // Mark active pill
+        // Mark active pill in the player list
         document
           .querySelectorAll(".player-pill")
-          .forEach((el) => el.classList.remove("player-pill-active"));
+          .forEach((el) => {
+            if (!el.classList.contains("player-tab")) {
+              el.classList.remove("player-pill-active");
+            }
+          });
         btn.classList.add("player-pill-active");
 
-        // Load stats into the card
-        loadSeasonStatsForPlayer(player);
+        // Set current player and load stats for the currently active tab
+        currentPlayer = player;
+        const titleEl = document.getElementById("player-card-title");
+        if (titleEl) {
+          titleEl.textContent = player.name;
+        }
+
+        ensureTabsInitialized();
+        updateTabActiveClasses();
+        renderTabStats(currentTab);
       });
 
       gridEl.appendChild(btn);
@@ -216,6 +353,8 @@
         gameLabel || "Game selected – players for this matchup will load here.";
     }
 
+    ensureTabsInitialized();
+    updateTabActiveClasses();
     renderDemoPlayers(gameLabel);
   }
 
