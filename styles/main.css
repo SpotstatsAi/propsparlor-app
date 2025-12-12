@@ -960,3 +960,45 @@ button {
   overflow-x: hidden;
   overflow-y: visible;
 }
+
+/* Global scrollbar theming (safe, cross-browser) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 255, 180, 0.55) rgba(6, 10, 32, 0.85);
+}
+
+/* WebKit scrollbar — Vegas / Outlier style */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: linear-gradient(
+    180deg,
+    rgba(6, 10, 32, 0.95),
+    rgba(4, 6, 24, 0.85)
+  );
+  border-radius: 12px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    180deg,
+    rgba(0, 255, 180, 0.85),
+    rgba(0, 190, 140, 0.85)
+  );
+  border-radius: 12px;
+  border: 2px solid rgba(6, 10, 32, 0.9);
+  box-shadow:
+    inset 0 0 6px rgba(0, 255, 180, 0.35),
+    0 0 10px rgba(0, 255, 180, 0.25);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(
+    180deg,
+    rgba(0, 255, 200, 1),
+    rgba(0, 210, 160, 1)
+  );
+}
