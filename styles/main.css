@@ -456,38 +456,53 @@ body {
 }
 
 /* -----------------------------------------------------
-   LINK BUTTON — for "View props / stats"
+   LINK BUTTON — Neon glow to match sidebar aesthetic
    ----------------------------------------------------- */
 .link-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
 
-  padding: 4px 10px;
+  padding: 4px 12px;
   font-size: 0.8rem;
   font-weight: 500;
 
-  color: #d5e6ff;
-  background: rgba(0, 0, 0, 0.35);
-  border: 1px solid rgba(0, 180, 255, 0.45);
-  border-radius: 6px;
+  color: #d9f6ff;
+  background: rgba(0, 10, 20, 0.45);
+  border: 1px solid rgba(0, 200, 255, 0.55);
+  border-radius: 8px;
 
   cursor: pointer;
-  transition: all 0.18s ease;
+  transition: all 0.25s ease;
   white-space: nowrap;
+
+  /* soft glow around the button */
+  box-shadow:
+    0 0 6px rgba(0, 200, 255, 0.55),
+    inset 0 0 8px rgba(0, 180, 255, 0.25);
 
   backdrop-filter: blur(4px);
 }
 
 .link-button:hover {
   color: #ffffff;
-  border-color: rgba(0, 200, 255, 0.75);
-  background: rgba(0, 40, 80, 0.55);
-  box-shadow: 0 0 10px rgba(0, 200, 255, 0.45);
+  border-color: rgba(0, 255, 255, 0.85);
+
+  background: linear-gradient(
+    135deg,
+    rgba(0, 40, 80, 0.65),
+    rgba(0, 20, 40, 0.55)
+  );
+
+  box-shadow:
+    0 0 14px rgba(0, 255, 255, 0.75),
+    inset 0 0 10px rgba(0, 255, 255, 0.35);
+  transform: translateY(-1px) scale(1.03);
 }
 
 .link-button:active {
-  transform: scale(0.96);
-  box-shadow: 0 0 4px rgba(0, 200, 255, 0.4);
+  transform: scale(0.95);
+  box-shadow:
+    0 0 6px rgba(0, 255, 255, 0.55),
+    inset 0 0 6px rgba(0, 255, 255, 0.35);
 }
-
