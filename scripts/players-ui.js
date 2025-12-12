@@ -64,7 +64,7 @@
         `Season averages for ${player.name} (${player.team} · ${player.position}) will load here from /api/stats/season in the next step.`;
     }
 
-    // For now we keep placeholders in the grid. In the next thread we plug real numbers.
+    // For now we keep placeholders in the grid. Next thread: plug real numbers.
     statEls.forEach((el) => {
       el.textContent = "—";
     });
