@@ -193,6 +193,96 @@
               </p>
             </section>
 
-            <!-- NEW: Matchup players panel -->
+            <!-- Player stats shell (wired to /api/stats/season in later steps) -->
             <section class="panel">
-              <div class="panel
+              <div class="panel-header">
+                <span class="panel-title">Player Stats Card</span>
+                <span class="panel-tag panel-tag-soft">Season Averages</span>
+              </div>
+              <div class="player-card-shell">
+                <h3 id="player-card-title">No player selected</h3>
+                <p id="player-card-subtitle" class="panel-text">
+                  When you click a player, we&apos;ll pull their season averages from
+                  /api/stats/season and show core props like PTS, REB, AST, PRA, and 3PM.
+                </p>
+                <div class="player-stats-grid">
+                  <div class="player-stat-row">
+                    <span class="player-stat-label">PTS</span>
+                    <span class="player-stat-value" data-stat-key="pts">—</span>
+                  </div>
+                  <div class="player-stat-row">
+                    <span class="player-stat-label">REB</span>
+                    <span class="player-stat-value" data-stat-key="reb">—</span>
+                  </div>
+                  <div class="player-stat-row">
+                    <span class="player-stat-label">AST</span>
+                    <span class="player-stat-value" data-stat-key="ast">—</span>
+                  </div>
+                  <div class="player-stat-row">
+                    <span class="player-stat-label">PRA</span>
+                    <span class="player-stat-value" data-stat-key="pra">—</span>
+                  </div>
+                  <div class="player-stat-row">
+                    <span class="player-stat-label">3PM</span>
+                    <span class="player-stat-value" data-stat-key="fg3m">—</span>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </section>
+
+          <!-- TRENDS & TOOLS VIEW -->
+          <section class="view" data-view-panel="trends">
+            <section class="panel">
+              <div class="panel-header">
+                <span class="panel-title">Trends &amp; Tools Shell</span>
+                <span class="panel-tag panel-tag-soft">Static · Thread 1</span>
+              </div>
+              <p class="panel-text">
+                This space is reserved for advanced views: team vs. position
+                stats, pace and efficiency charts, and any custom tools you want
+                to give yourself an edge.
+              </p>
+              <p class="panel-text">
+                Right now, it&apos;s a placeholder panel so that your nav feels
+                real even before data and charts are connected.
+              </p>
+            </section>
+          </section>
+        </section>
+
+        <!-- RIGHT: PICK SLIP SHELL -->
+        <aside class="sidebar sidebar-right">
+          <div class="panel slip-panel">
+            <div class="panel-header">
+              <span class="panel-title">Pick Slip</span>
+              <span class="panel-tag panel-tag-soft">Coming Soon</span>
+            </div>
+            <p class="panel-text">
+              This will be your slip builder: selected props, odds, and
+              parlay summary before sending to your sportsbook.
+            </p>
+            <ul class="slip-list">
+              <li class="slip-placeholder-row">
+                <span class="slip-placeholder-label">No picks added</span>
+                <span class="slip-placeholder-sub">Future: click a prop to send it here.</span>
+              </li>
+            </ul>
+            <button class="slip-button" disabled>
+              Build Parlay (Disabled · Thread 1)
+            </button>
+          </div>
+        </aside>
+      </div>
+    </main>
+
+    <footer class="app-footer">
+      <span>PropsParlor · UI Shell Only · Powered by Cloudflare Pages</span>
+    </footer>
+  </div>
+
+  <script src="scripts/main.js"></script>
+  <script src="scripts/games-today-ui.js"></script>
+  <script src="scripts/players-ui.js"></script>
+</body>
+</html>
