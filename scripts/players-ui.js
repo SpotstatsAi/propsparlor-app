@@ -4,6 +4,8 @@
 // selectable primary stat (PTS / REB / AST / PRA / 3PM).
 //
 // Chart upgrade: pulls /api/stats/gamelog and renders SVG sparklines + a main line chart.
+// Outlier-style upgrade (v1): prop-line overlay + over/under toggle + hit-rate shading + hit-rate %.
+// Opponent context: placeholder line (we’ll wire real opponent/pace later).
 
 (function () {
   const SEASON_API_URL = "/api/stats/season";
@@ -22,8 +24,12 @@
   let currentPlayer = null;
   let currentTab = "season";  // "season" | "last10" | "last5"
   let primaryStatKey = "pra"; // "pts" | "reb" | "ast" | "pra" | "fg3m"
-  const statsCache = Object.create(null); // key: `${playerId}:${tab}`
+  const statsCache = Object.create(null);   // key: `${playerId}:${tab}`
   const gamelogCache = Object.create(null); // key: `${playerId}` -> array
+
+  // Prop-line controls (v1)
+  let propMode = "over"; // "over" | "under"
+  let propLine = null;   // number | null
 
   function initPlayerViewPlaceholders() {
     const addSlipBtn = document.getElementById("player-add-slip");
@@ -41,7 +47,6 @@
     wireStatRows();
     updateStatMeters(null);
 
-    // Ensure chart containers are in a known state
     renderChartPlaceholders();
   }
 
@@ -87,7 +92,6 @@
       btn.textContent = tabCfg.label;
 
       if (idx === 0) btn.classList.add("player-pill-active");
-
       btn.addEventListener("click", () => onTabClick(tabCfg.id));
       tabs.appendChild(btn);
     });
@@ -141,7 +145,6 @@
     updateStatMeters(statsObj || null);
   }
 
-  // Set meter fill % for each stat row based on max stat in current view
   function updateStatMeters(statsObj) {
     const rows = document.querySelectorAll(".player-stat-row");
     if (!rows.length) return;
@@ -167,7 +170,6 @@
         return;
       }
 
-      // keep a minimum visible fill so it doesn’t look “dead”
       const pct = Math.max(6, Math.min(100, (v / maxVal) * 100));
       row.style.setProperty("--fill", `${pct}%`);
     });
@@ -200,8 +202,9 @@
 
     syncAddSlipButtonDisabled();
 
-    // Re-render main chart for the newly selected stat (if we have a player)
     if (currentPlayer && currentPlayer.bdlId) {
+      // Reset prop-line to a sensible default on stat change
+      propLine = null;
       renderChartsForCurrentPlayer().catch(() => {});
     }
   }
@@ -321,7 +324,6 @@
       applySubtitle(tab, currentPlayer, false);
       syncAddSlipButtonDisabled();
 
-      // Update charts after stats load (charts come from gamelog)
       await renderChartsForCurrentPlayer();
     } catch (err) {
       console.error("Failed to load stats", tab, err);
@@ -336,6 +338,9 @@
     currentTab = tabId;
     updateTabActiveClasses();
     if (!currentPlayer) return;
+
+    // Reset prop-line default when tab changes (so line matches window)
+    propLine = null;
     renderTabStats(currentTab);
   }
 
@@ -396,6 +401,10 @@
 
         const titleEl = document.getElementById("player-card-title");
         if (titleEl) titleEl.textContent = player.name;
+
+        // Reset prop-line on new player
+        propLine = null;
+        propMode = "over";
 
         ensureTabsInitialized();
         wireStatRows();
@@ -529,6 +538,7 @@
         .join(" · ") || "No numeric stats available";
 
     li.appendChild(header);
+    li.appendChild(tagEl);
     li.appendChild(sub);
     slipList.appendChild(li);
   }
@@ -543,6 +553,10 @@
 
     const titleEl = document.getElementById("player-card-title");
     if (titleEl) titleEl.textContent = "No player selected";
+
+    // reset line controls for new game context
+    propLine = null;
+    propMode = "over";
 
     applySubtitle(currentTab, currentPlayer, false);
     setStatValuesFromObject({});
@@ -572,8 +586,6 @@
     const { sparklines, main } = getChartsEls();
 
     if (sparklines) {
-      // Keep existing placeholder boxes in index.html if present.
-      // If empty, show a minimal message.
       if (!sparklines.children || sparklines.children.length === 0) {
         sparklines.innerHTML =
           `<div class="panel-text" style="opacity:.75;">Charts placeholder</div>`;
@@ -581,8 +593,6 @@
     }
 
     if (main) {
-      // If the index.html placeholder is still there, leave it.
-      // If empty, provide a minimal placeholder.
       if (!main.innerHTML || !main.innerHTML.trim()) {
         main.innerHTML =
           `<div class="panel-text" style="opacity:.75;">Select a player to render charts.</div>`;
@@ -610,25 +620,26 @@
   }
 
   function seriesForKey(rows, key) {
-    // Rows are DESC by date from API; chart should go left->right oldest->newest
-    const ordered = rows.slice().reverse();
+    const ordered = rows.slice().reverse(); // oldest -> newest
 
-    return ordered.map((r) => {
-      const pts = toNum(r?.pts);
-      const reb = toNum(r?.reb);
-      const ast = toNum(r?.ast);
-      const fg3m = toNum(r?.fg3m);
-      const pra = (pts !== null && reb !== null && ast !== null) ? (pts + reb + ast) : null;
+    return ordered
+      .map((r) => {
+        const pts = toNum(r?.pts);
+        const reb = toNum(r?.reb);
+        const ast = toNum(r?.ast);
+        const fg3m = toNum(r?.fg3m);
+        const pra = (pts !== null && reb !== null && ast !== null) ? (pts + reb + ast) : null;
 
-      switch (key) {
-        case "pts": return pts;
-        case "reb": return reb;
-        case "ast": return ast;
-        case "fg3m": return fg3m;
-        case "pra":
-        default: return pra;
-      }
-    }).filter((v) => v !== null);
+        switch (key) {
+          case "pts": return pts;
+          case "reb": return reb;
+          case "ast": return ast;
+          case "fg3m": return fg3m;
+          case "pra":
+          default: return pra;
+        }
+      })
+      .filter((v) => v !== null);
   }
 
   function buildSparkSVG(values, opts) {
@@ -656,78 +667,15 @@
       return [x, y];
     });
 
-    const d = pts.map((p, i) => (i === 0 ? `M ${p[0].toFixed(2)} ${p[1].toFixed(2)}` : `L ${p[0].toFixed(2)} ${p[1].toFixed(2)}`)).join(" ");
+    const d = pts
+      .map((p, i) =>
+        i === 0 ? `M ${p[0].toFixed(2)} ${p[1].toFixed(2)}` : `L ${p[0].toFixed(2)} ${p[1].toFixed(2)}`
+      )
+      .join(" ");
 
     return `
       <svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" aria-label="sparkline">
         <path d="${d}" fill="none" stroke="rgba(0,255,180,0.85)" stroke-width="2" stroke-linecap="round" />
-      </svg>
-    `;
-  }
-
-  function buildMainChartSVG(values, opts) {
-    const width = opts?.width || 640;
-    const height = opts?.height || 210;
-
-    if (!values || values.length < 2) {
-      return `<div class="panel-text" style="opacity:.8;">Not enough game-log points to chart.</div>`;
-    }
-
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const span = Math.max(1e-6, max - min);
-
-    const padL = 34;
-    const padR = 12;
-    const padT = 12;
-    const padB = 24;
-
-    const innerW = width - padL - padR;
-    const innerH = height - padT - padB;
-
-    const pts = values.map((v, i) => {
-      const x = padL + (i / (values.length - 1)) * innerW;
-      const y = padT + (1 - (v - min) / span) * innerH;
-      return [x, y, v];
-    });
-
-    const d = pts.map((p, i) => (i === 0 ? `M ${p[0].toFixed(2)} ${p[1].toFixed(2)}` : `L ${p[0].toFixed(2)} ${p[1].toFixed(2)}`)).join(" ");
-
-    // Simple rolling average (5-game) overlay
-    const roll = rollingAverage(values, Math.min(5, values.length));
-    const rollPts = roll.map((v, i) => {
-      const x = padL + (i / (roll.length - 1)) * innerW;
-      const y = padT + (1 - (v - min) / span) * innerH;
-      return [x, y];
-    });
-    const rd = rollPts.map((p, i) => (i === 0 ? `M ${p[0].toFixed(2)} ${p[1].toFixed(2)}` : `L ${p[0].toFixed(2)} ${p[1].toFixed(2)}`)).join(" ");
-
-    // Grid lines (horizontal)
-    const gridLines = 4;
-    const grid = Array.from({ length: gridLines + 1 }).map((_, i) => {
-      const y = padT + (i / gridLines) * innerH;
-      return `<line x1="${padL}" y1="${y.toFixed(2)}" x2="${(padL + innerW).toFixed(2)}" y2="${y.toFixed(2)}" stroke="rgba(255,255,255,0.06)" stroke-width="1" />`;
-    }).join("");
-
-    const maxLabel = max.toFixed(0);
-    const minLabel = min.toFixed(0);
-
-    const dots = pts.map((p) => {
-      return `<circle cx="${p[0].toFixed(2)}" cy="${p[1].toFixed(2)}" r="2.8" fill="rgba(0,255,180,0.85)" />`;
-    }).join("");
-
-    return `
-      <svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" aria-label="trend chart">
-        ${grid}
-        <text x="8" y="${(padT + 10).toFixed(2)}" fill="rgba(255,255,255,0.70)" font-size="10">${maxLabel}</text>
-        <text x="8" y="${(padT + innerH).toFixed(2)}" fill="rgba(255,255,255,0.55)" font-size="10">${minLabel}</text>
-
-        <path d="${d}" fill="none" stroke="rgba(0,255,180,0.92)" stroke-width="2.6" stroke-linecap="round" />
-        ${dots}
-
-        <path d="${rd}" fill="none" stroke="rgba(0,120,255,0.70)" stroke-width="2" stroke-linecap="round" stroke-dasharray="5 4" />
-
-        <text x="${padL}" y="${height - 8}" fill="rgba(255,255,255,0.55)" font-size="10">Oldest → Newest</text>
       </svg>
     `;
   }
@@ -745,21 +693,238 @@
     return out;
   }
 
+  function hitRate(values, line, mode) {
+    if (!values || values.length === 0) return null;
+    if (line === null || line === undefined || !Number.isFinite(line)) return null;
+
+    let hits = 0;
+    for (const v of values) {
+      if (!Number.isFinite(v)) continue;
+      if (mode === "under") {
+        if (v <= line) hits++;
+      } else {
+        if (v >= line) hits++;
+      }
+    }
+    return Math.round((hits / values.length) * 100);
+  }
+
+  function buildMainChartSVG(values, opts) {
+    const width = opts?.width || 640;
+    const height = opts?.height || 210;
+    const line = opts?.propLine ?? null;
+    const mode = opts?.propMode ?? "over";
+
+    if (!values || values.length < 2) {
+      return `<div class="panel-text" style="opacity:.8;">Not enough game-log points to chart.</div>`;
+    }
+
+    const minV = Math.min(...values);
+    const maxV = Math.max(...values);
+
+    // Expand bounds to include prop line so the overlay is always visible
+    const min = (line !== null && Number.isFinite(line)) ? Math.min(minV, line) : minV;
+    const max = (line !== null && Number.isFinite(line)) ? Math.max(maxV, line) : maxV;
+
+    const span = Math.max(1e-6, max - min);
+
+    const padL = 34;
+    const padR = 12;
+    const padT = 12;
+    const padB = 24;
+
+    const innerW = width - padL - padR;
+    const innerH = height - padT - padB;
+
+    const pts = values.map((v, i) => {
+      const x = padL + (i / (values.length - 1)) * innerW;
+      const y = padT + (1 - (v - min) / span) * innerH;
+      return [x, y, v];
+    });
+
+    const d = pts
+      .map((p, i) =>
+        i === 0 ? `M ${p[0].toFixed(2)} ${p[1].toFixed(2)}` : `L ${p[0].toFixed(2)} ${p[1].toFixed(2)}`
+      )
+      .join(" ");
+
+    const roll = rollingAverage(values, Math.min(5, values.length));
+    const rollPts = roll.map((v, i) => {
+      const x = padL + (i / (roll.length - 1)) * innerW;
+      const y = padT + (1 - (v - min) / span) * innerH;
+      return [x, y];
+    });
+    const rd = rollPts
+      .map((p, i) =>
+        i === 0 ? `M ${p[0].toFixed(2)} ${p[1].toFixed(2)}` : `L ${p[0].toFixed(2)} ${p[1].toFixed(2)}`
+      )
+      .join(" ");
+
+    const gridLines = 4;
+    const grid = Array.from({ length: gridLines + 1 })
+      .map((_, i) => {
+        const y = padT + (i / gridLines) * innerH;
+        return `<line x1="${padL}" y1="${y.toFixed(2)}" x2="${(padL + innerW).toFixed(2)}" y2="${y.toFixed(2)}" stroke="rgba(255,255,255,0.06)" stroke-width="1" />`;
+      })
+      .join("");
+
+    const maxLabel = max.toFixed(0);
+    const minLabel = min.toFixed(0);
+
+    const dots = pts
+      .map((p) => `<circle cx="${p[0].toFixed(2)}" cy="${p[1].toFixed(2)}" r="2.8" fill="rgba(0,255,180,0.85)" />`)
+      .join("");
+
+    // Prop line overlay + shading
+    let propOverlay = "";
+    if (line !== null && Number.isFinite(line)) {
+      const yLine = padT + (1 - (line - min) / span) * innerH;
+
+      // “Hit zone” shading (over = above line is hit; under = below line is hit)
+      const hitY = mode === "over" ? padT : yLine;
+      const hitH = mode === "over" ? (yLine - padT) : (padT + innerH - yLine);
+
+      // If hitH is negative due to bounds, clamp
+      const safeHitH = Math.max(0, hitH);
+
+      propOverlay = `
+        <rect
+          x="${padL}"
+          y="${Math.min(hitY, padT + innerH).toFixed(2)}"
+          width="${innerW.toFixed(2)}"
+          height="${safeHitH.toFixed(2)}"
+          fill="${mode === "over" ? "rgba(0,255,180,0.06)" : "rgba(0,120,255,0.06)"}"
+        />
+        <line
+          x1="${padL}"
+          y1="${yLine.toFixed(2)}"
+          x2="${(padL + innerW).toFixed(2)}"
+          y2="${yLine.toFixed(2)}"
+          stroke="rgba(255,215,0,0.85)"
+          stroke-width="1.6"
+          stroke-dasharray="6 5"
+        />
+        <text
+          x="${(padL + innerW - 2).toFixed(2)}"
+          y="${(yLine - 6).toFixed(2)}"
+          text-anchor="end"
+          fill="rgba(255,215,0,0.85)"
+          font-size="10"
+        >
+          Line ${line.toFixed(1)}
+        </text>
+      `;
+    }
+
+    return `
+      <svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" aria-label="trend chart">
+        ${grid}
+        ${propOverlay}
+
+        <text x="8" y="${(padT + 10).toFixed(2)}" fill="rgba(255,255,255,0.70)" font-size="10">${maxLabel}</text>
+        <text x="8" y="${(padT + innerH).toFixed(2)}" fill="rgba(255,255,255,0.55)" font-size="10">${minLabel}</text>
+
+        <path d="${d}" fill="none" stroke="rgba(0,255,180,0.92)" stroke-width="2.6" stroke-linecap="round" />
+        ${dots}
+
+        <path d="${rd}" fill="none" stroke="rgba(0,120,255,0.70)" stroke-width="2" stroke-linecap="round" stroke-dasharray="5 4" />
+
+        <text x="${padL}" y="${height - 8}" fill="rgba(255,255,255,0.55)" font-size="10">Oldest → Newest</text>
+      </svg>
+    `;
+  }
+
   function sparkTargets() {
-    // Our index.html uses 5 “status-item” cards as placeholders inside #player-sparklines.
-    // Each card has a label + a second div meant to be filled. We’ll fill that second div.
     const root = document.getElementById("player-sparklines");
     if (!root) return null;
-
     const cards = Array.from(root.children || []);
     if (!cards.length) return null;
 
     return cards.map((card) => {
       const blocks = card.querySelectorAll("div");
-      // The last div in each card is the “spark container”
       const sparkHost = blocks && blocks.length ? blocks[blocks.length - 1] : null;
       return sparkHost;
     });
+  }
+
+  function defaultLineFor(values) {
+    if (!values || !values.length) return null;
+    const avg = values.reduce((a, b) => a + b, 0) / values.length;
+    // Default to a “sportsbook-ish” 0.5 increment
+    return Math.round(avg * 2) / 2;
+  }
+
+  function renderPropControls(container, statLabel, tabLabel, values) {
+    const currentDefault = defaultLineFor(values);
+    if (propLine === null && currentDefault !== null) propLine = currentDefault;
+
+    const hit = (propLine !== null) ? hitRate(values, propLine, propMode) : null;
+
+    container.innerHTML = `
+      <div style="width:100%;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; flex-wrap:wrap;">
+          <div style="font-size:.82rem; letter-spacing:.12em; text-transform:uppercase; opacity:.88;">
+            ${statLabel} · ${tabLabel} Trend
+          </div>
+
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <button type="button" id="pp-mode-over"
+              style="padding:4px 10px; border-radius:999px; border:1px solid rgba(0,255,180,0.35); background:${propMode === "over" ? "rgba(0,255,180,0.14)" : "rgba(10,10,24,0.65)"}; color:#f7f7ff; font-size:11px; letter-spacing:.08em; text-transform:uppercase; cursor:pointer;">
+              Over
+            </button>
+            <button type="button" id="pp-mode-under"
+              style="padding:4px 10px; border-radius:999px; border:1px solid rgba(0,120,255,0.35); background:${propMode === "under" ? "rgba(0,120,255,0.14)" : "rgba(10,10,24,0.65)"}; color:#f7f7ff; font-size:11px; letter-spacing:.08em; text-transform:uppercase; cursor:pointer;">
+              Under
+            </button>
+
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span style="font-size:11px; opacity:.75; letter-spacing:.08em; text-transform:uppercase;">Line</span>
+              <input id="pp-line-input" type="number" step="0.5" value="${propLine !== null ? propLine : ""}"
+                style="width:74px; padding:4px 8px; border-radius:10px; border:1px solid rgba(255,215,0,0.35); background:rgba(0,0,0,0.25); color:#f7f7ff; outline:none;" />
+            </div>
+
+            <div style="font-size:11px; opacity:.78; white-space:nowrap;">
+              Hit rate: <span style="opacity:1;">${hit !== null ? hit + "%" : "—"}</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="font-size:.72rem; opacity:.72; line-height:1.35; margin-bottom:8px;">
+          Opponent context (placeholder): pace / matchup / role will render here.
+        </div>
+
+        <div id="pp-chart-svg"></div>
+
+        <div style="margin-top:8px; font-size:.72rem; opacity:.72; line-height:1.35;">
+          Next upgrade: opponent-specific splits + minutes/usage context + bet-ready line suggestions.
+        </div>
+      </div>
+    `;
+
+    // Wire controls
+    const overBtn = container.querySelector("#pp-mode-over");
+    const underBtn = container.querySelector("#pp-mode-under");
+    const lineInput = container.querySelector("#pp-line-input");
+
+    if (overBtn) {
+      overBtn.addEventListener("click", () => {
+        propMode = "over";
+        renderChartsForCurrentPlayer().catch(() => {});
+      });
+    }
+    if (underBtn) {
+      underBtn.addEventListener("click", () => {
+        propMode = "under";
+        renderChartsForCurrentPlayer().catch(() => {});
+      });
+    }
+    if (lineInput) {
+      lineInput.addEventListener("input", () => {
+        const v = parseFloat(lineInput.value);
+        propLine = Number.isFinite(v) ? v : null;
+        renderChartsForCurrentPlayer().catch(() => {});
+      });
+    }
   }
 
   async function renderChartsForCurrentPlayer() {
@@ -769,17 +934,17 @@
       return;
     }
 
-    const limit = 50; // fetch enough once; then slice by tab for display
+    const limit = 50;
     const rows = await fetchGamelog(currentPlayer.bdlId, limit);
     if (!rows || rows.length < 2) {
-      if (main) main.innerHTML = `<div class="panel-text" style="opacity:.8;">No game log available yet.</div>`;
+      main.innerHTML = `<div class="panel-text" style="opacity:.8;">No game log available yet.</div>`;
       return;
     }
 
     const windowN = windowSizeForTab(currentTab);
-    const sliced = rows.slice(0, Math.max(windowN, 5)); // rows are DESC; slice recent N
+    const sliced = rows.slice(0, Math.max(windowN, 5));
 
-    // Sparklines: PTS/REB/AST/PRA/3PM always use last 10 (or available)
+    // Sparklines
     const sparkRows = rows.slice(0, 12);
     const sparkKeys = ["pts", "reb", "ast", "pra", "fg3m"];
     const sparkHosts = sparkTargets();
@@ -791,38 +956,63 @@
       });
     }
 
-    // Main chart uses the primary stat + the selected tab window
+    // Main chart
     const mainVals = seriesForKey(sliced, primaryStatKey);
     const statLabel = statLabelFromKey(primaryStatKey);
     const tabLabel = currentTabLabelShort();
 
-    // Size main chart to container
+    // Size to container
     const rect = main.getBoundingClientRect ? main.getBoundingClientRect() : null;
     const w = rect && rect.width ? Math.max(520, Math.floor(rect.width)) : 640;
 
-    main.innerHTML = `
-      <div style="width:100%;">
-        <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:8px;">
-          <div style="font-size:.82rem; letter-spacing:.12em; text-transform:uppercase; opacity:.88;">
-            ${statLabel} · ${tabLabel} Trend
-          </div>
-          <div style="font-size:.72rem; opacity:.72; white-space:nowrap;">
-            Rolling avg overlay (v1)
-          </div>
-        </div>
-        ${buildMainChartSVG(mainVals, { width: w, height: 210 })}
-        <div style="margin-top:8px; font-size:.72rem; opacity:.72; line-height:1.35;">
-          Next upgrade: prop-line overlay + hit-rate shading + opponent context.
-        </div>
-      </div>
-    `;
+    // Render controls + wrapper
+    renderPropControls(main, statLabel, tabLabel, mainVals);
+
+    const svgHost = main.querySelector("#pp-chart-svg");
+    if (!svgHost) return;
+
+    svgHost.innerHTML = buildMainChartSVG(mainVals, {
+      width: w,
+      height: 210,
+      propLine,
+      propMode,
+    });
   }
 
   // ---------------------------
-  // Boot
+  // View entry
   // ---------------------------
-  document.addEventListener("DOMContentLoaded", initPlayerViewPlaceholders);
 
+  function openPlayersForGame(gameLabel) {
+    switchToPlayersView();
+
+    const gameCtx = document.getElementById("players-game-context");
+    if (gameCtx) gameCtx.textContent = gameLabel || "Game selected.";
+
+    currentPlayer = null;
+    propLine = null;
+    propMode = "over";
+
+    const titleEl = document.getElementById("player-card-title");
+    if (titleEl) titleEl.textContent = "No player selected";
+
+    applySubtitle(currentTab, currentPlayer, false);
+    setStatValuesFromObject({});
+    primaryStatKey = "pra";
+    setPrimaryStat(primaryStatKey);
+    syncAddSlipButtonDisabled();
+
+    ensureTabsInitialized();
+    wireStatRows();
+    updateTabActiveClasses();
+
+    renderChartPlaceholders();
+    renderDemoPlayers(gameLabel);
+  }
+
+  // Boot
+  document.addEventListener("DOMContentLoaded", initPlayerViewPlaceholders);
   window.PropsParlor = window.PropsParlor || {};
   window.PropsParlor.openPlayersForGame = openPlayersForGame;
 })();
+
