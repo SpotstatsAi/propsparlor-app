@@ -1002,3 +1002,32 @@ button {
     rgba(0, 210, 160, 1)
   );
 }
+
+/* -----------------------------------------------------
+   Scroll Sync: Sparklines row + Main chart (Players view)
+   ----------------------------------------------------- */
+
+/* Make the spark row horizontally scrollable when needed */
+#player-sparklines{
+  display: flex !important;
+  gap: 8px !important;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 8px;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Each spark card becomes a fixed-width “tile” so it can scroll cleanly */
+#player-sparklines > .status-item{
+  flex: 0 0 160px;
+  min-width: 160px;
+}
+
+/* Main chart container can scroll horizontally if SVG is wider than the card */
+#player-main-chart{
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
