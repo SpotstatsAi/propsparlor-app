@@ -1,16 +1,5 @@
 // /functions/api/players/search.js
 // Route: GET /api/players/search?query=lebron&cursor=...&per_page=...
-//
-// Uses BALLDONTLIE NBA players endpoint:
-//   GET https://api.balldontlie.io/nba/v1/players?search=...&cursor=...&per_page=...
-//
-// Standard response format:
-//   {
-//     ok: true | false,
-//     data: [...],
-//     meta: { source, sport, endpoint, cursor, next_cursor },
-//     error?: { code, message }
-//   }
 
 function jsonResponse(body, init = {}) {
   const status = init.status || 200;
@@ -18,8 +7,8 @@ function jsonResponse(body, init = {}) {
     status,
     headers: {
       "Content-Type": "application/json",
-      ...(init.headers || {})
-    }
+      ...(init.headers || {}),
+    },
   });
 }
 
@@ -27,7 +16,7 @@ function errorResponse(status, code, message) {
   return jsonResponse(
     {
       ok: false,
-      error: { code, message }
+      error: { code, message },
     },
     { status }
   );
@@ -57,7 +46,6 @@ export async function onRequest(context) {
     return n;
   })();
 
-  // BALLDONTLIE base URL for multi-sport API
   const bdlUrl = new URL("https://api.balldontlie.io/nba/v1/players");
   bdlUrl.searchParams.set("search", query);
   bdlUrl.searchParams.set("per_page", String(perPage));
@@ -80,10 +68,10 @@ export async function onRequest(context) {
       method: "GET",
       headers: {
         Accept: "application/json",
-        Authorization: `Bearer ${apiKey}`
-      }
+        Authorization: `Bearer ${apiKey}`,
+      },
     });
-  } catch (err) {
+  } catch {
     return errorResponse(
       502,
       "UPSTREAM_FETCH_FAILED",
@@ -102,7 +90,7 @@ export async function onRequest(context) {
   let raw;
   try {
     raw = await upstream.json();
-  } catch (err) {
+  } catch {
     return errorResponse(
       502,
       "UPSTREAM_PARSE_FAILED",
@@ -133,8 +121,8 @@ export async function onRequest(context) {
         abbreviation: team.abbreviation ?? null,
         city: team.city ?? null,
         conference: team.conference ?? null,
-        division: team.division ?? null
-      }
+        division: team.division ?? null,
+      },
     };
   });
 
@@ -150,7 +138,7 @@ export async function onRequest(context) {
       sport: "nba",
       endpoint: "players.search",
       cursor: meta.cursor ?? null,
-      next_cursor: meta.next_cursor ?? null
-    }
+      next_cursor: meta.next_cursor ?? null,
+    },
   });
 }
