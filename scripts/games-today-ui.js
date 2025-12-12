@@ -1,152 +1,170 @@
 // scripts/games-today-ui.js
-// Wires the "Today's Games" view to /api/stats/games-today without touching layout.
+// Thread 4/7 – Today’s Games table + hook into Players view
 
 (function () {
-  // Use the existing Worker route: /api/stats/games-today
-  const GAMES_TODAY_URL = "/api/stats/games-today";
+  const API_URL = "/api/stats/games-today";
 
-  async function fetchGamesToday() {
-    const res = await fetch(GAMES_TODAY_URL, {
-      headers: { Accept: "application/json" },
-    });
-
-    if (!res.ok) {
-      throw new Error(`API ${res.status}`);
-    }
-
-    const data = await res.json();
-
-    // Try to be flexible about the worker response shape.
-    let games = [];
-    if (Array.isArray(data.games)) {
-      games = data.games;
-    } else if (Array.isArray(data.data)) {
-      games = data.data;
-    } else if (Array.isArray(data.results)) {
-      games = data.results;
-    }
-
-    if (!data.ok && !games.length) {
-      const message =
-        (data.error && (data.error.message || data.error.code)) ||
-        "Unknown API error";
-      throw new Error(message);
-    }
-
-    return games;
-  }
-
-  function getEl(id) {
+  function $(id) {
     return document.getElementById(id);
   }
 
-  function formatTipoff(dateStr) {
-    if (!dateStr) return "TBD";
-    const d = new Date(dateStr);
-    if (Number.isNaN(d.getTime())) return "TBD";
-
-    return d.toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-    });
+  function setVisibility(el, visible) {
+    if (!el) return;
+    el.style.display = visible ? "" : "none";
   }
 
   function formatMatchup(game) {
     const home =
-      game.home_team?.abbreviation ||
-      game.home_team?.name ||
-      game.home_team?.full_name ||
+      (game.home_team && (game.home_team.abbreviation || game.home_team.name)) ||
+      game.home_abbr ||
+      game.home ||
       "HOME";
+
     const away =
-      game.visitor_team?.abbreviation ||
-      game.visitor_team?.name ||
-      game.visitor_team?.full_name ||
+      (game.visitor_team &&
+        (game.visitor_team.abbreviation || game.visitor_team.name)) ||
+      game.away_abbr ||
+      game.away ||
       "AWAY";
 
     return `${away} @ ${home}`;
   }
 
+  function formatTipoff(game) {
+    // The worker might send tipoff_local, tipoff, or a generic time string
+    return (
+      game.tipoff_local ||
+      game.tipoff ||
+      game.start_time_local ||
+      game.game_time ||
+      "TBD"
+    );
+  }
+
   function formatStatus(game) {
-    if (game.status && typeof game.status === "string") {
-      return game.status;
-    }
-    return "Scheduled";
+    return game.status || "Scheduled";
   }
 
-  function showState({ loading, error, empty, hasData }) {
-    const loadingEl = getEl("games-today-loading");
-    const errorEl = getEl("games-today-error");
-    const emptyEl = getEl("games-today-empty");
-    const wrapperEl = getEl("games-today-wrapper");
+  function createCtaButton(matchupLabel, tipoffText) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "games-table-cta";
+    btn.textContent = "Players & Stats";
 
-    if (!loadingEl || !errorEl || !emptyEl || !wrapperEl) return;
+    btn.addEventListener("click", () => {
+      const label = tipoffText && tipoffText !== "TBD"
+        ? `${matchupLabel} · ${tipoffText}`
+        : matchupLabel;
 
-    loadingEl.style.display = loading ? "" : "none";
-    errorEl.style.display = error ? "" : "none";
-    emptyEl.style.display = empty ? "" : "none";
-    wrapperEl.style.display = hasData ? "" : "none";
+      if (
+        window.PropsParlor &&
+        typeof window.PropsParlor.openPlayersForGame === "function"
+      ) {
+        window.PropsParlor.openPlayersForGame(label);
+      } else {
+        // Fallback: at least switch to the Players tab if helper is missing
+        const playersNav = document.querySelector(
+          '.nav-item[data-view="players"]'
+        );
+        if (playersNav) {
+          playersNav.click();
+        }
+      }
+    });
+
+    return btn;
   }
 
-  function renderGames(games) {
-    const tbody = getEl("games-today-body");
-    if (!tbody) return;
+  function renderGamesTable(games) {
+    const body = $("games-today-body");
+    const wrapper = $("games-today-wrapper");
+    const emptyEl = $("games-today-empty");
 
-    if (!games.length) {
-      tbody.innerHTML = "";
-      showState({ loading: false, error: false, empty: true, hasData: false });
+    if (!body || !wrapper || !emptyEl) return;
+
+    body.innerHTML = "";
+
+    if (!Array.isArray(games) || games.length === 0) {
+      setVisibility(wrapper, false);
+      setVisibility(emptyEl, true);
       return;
     }
 
-    const rows = games
-      .map((game) => {
-        const matchup = formatMatchup(game);
-        const tipoff = formatTipoff(game.date || game.tipoff || game.time);
-        const status = formatStatus(game);
+    games.forEach((game) => {
+      const tr = document.createElement("tr");
 
-        return `
-          <tr>
-            <td>${matchup}</td>
-            <td>${tipoff}</td>
-            <td>${status}</td>
-            <td style="text-align: right;">
-              <button type="button" class="games-table-cta">
-                View props / stats
-              </button>
-            </td>
-          </tr>
-        `;
-      })
-      .join("");
+      const matchupText = formatMatchup(game);
+      const tipoffText = formatTipoff(game);
+      const statusText = formatStatus(game);
 
-    tbody.innerHTML = rows;
-    showState({ loading: false, error: false, empty: false, hasData: true });
+      const matchupTd = document.createElement("td");
+      matchupTd.textContent = matchupText;
+
+      const tipoffTd = document.createElement("td");
+      tipoffTd.textContent = tipoffText;
+
+      const statusTd = document.createElement("td");
+      statusTd.textContent = statusText;
+
+      const ctaTd = document.createElement("td");
+      ctaTd.style.textAlign = "right";
+      const ctaBtn = createCtaButton(matchupText, tipoffText);
+      ctaTd.appendChild(ctaBtn);
+
+      tr.appendChild(matchupTd);
+      tr.appendChild(tipoffTd);
+      tr.appendChild(statusTd);
+      tr.appendChild(ctaTd);
+
+      body.appendChild(tr);
+    });
+
+    setVisibility(emptyEl, false);
+    setVisibility(wrapper, true);
   }
 
   async function loadGamesToday() {
-    // Initial state: loading
-    showState({ loading: true, error: false, empty: false, hasData: false });
+    const loadingEl = $("games-today-loading");
+    const errorEl = $("games-today-error");
+    const emptyEl = $("games-today-empty");
+    const wrapper = $("games-today-wrapper");
+
+    if (loadingEl) loadingEl.textContent = "Loading today's games…";
+    setVisibility(loadingEl, true);
+    setVisibility(errorEl, false);
+    setVisibility(emptyEl, false);
+    setVisibility(wrapper, false);
 
     try {
-      const games = await fetchGamesToday();
-      renderGames(games);
+      const res = await fetch(API_URL, {
+        headers: { "Accept": "application/json" },
+      });
+
+      if (!res.ok) {
+        throw new Error("Non-200 from games-today API");
+      }
+
+      const payload = await res.json();
+
+      if (!payload || payload.ok === false) {
+        throw new Error(payload && payload.error ? payload.error : "API error");
+      }
+
+      const games = payload.data || payload.games || [];
+      renderGamesTable(games);
+      setVisibility(loadingEl, false);
     } catch (err) {
-      console.error("Error loading games:", err);
-      showState({ loading: false, error: true, empty: false, hasData: false });
+      console.error("Failed to load games today:", err);
+      if (errorEl) {
+        errorEl.textContent =
+          "Unable to load today's games. Please refresh to try again.";
+      }
+      setVisibility(loadingEl, false);
+      setVisibility(errorEl, true);
+      setVisibility(emptyEl, false);
+      setVisibility(wrapper, false);
     }
   }
 
-  // Called from main.js
-  window.initGamesToday = function initGamesToday() {
-    if (
-      !getEl("games-today-loading") ||
-      !getEl("games-today-error") ||
-      !getEl("games-today-empty") ||
-      !getEl("games-today-wrapper") ||
-      !getEl("games-today-body")
-    ) {
-      return;
-    }
-
-    loadGamesToday();
-  };
+  document.addEventListener("DOMContentLoaded", loadGamesToday);
 })();
