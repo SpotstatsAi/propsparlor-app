@@ -531,6 +531,32 @@ body {
   align-items: center;
   justify-content: space-between;
   font-size: 0.8rem;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.08s ease;
+}
+
+.player-stat-row:hover {
+  transform: translateY(-0.5px);
+  border-color: rgba(0, 255, 180, 0.5);
+  box-shadow:
+    0 0 10px rgba(0, 255, 180, 0.4),
+    0 0 18px rgba(0, 120, 255, 0.35);
+}
+
+.player-stat-row-active {
+  border-color: rgba(0, 255, 180, 0.9);
+  background: radial-gradient(
+    circle at left,
+    rgba(0, 255, 180, 0.3),
+    rgba(10, 16, 38, 0.98)
+  );
+  box-shadow:
+    0 0 14px rgba(0, 255, 180, 0.7),
+    0 0 24px rgba(0, 120, 255, 0.55);
 }
 
 .player-stat-label {
