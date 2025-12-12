@@ -1,6 +1,6 @@
 // scripts/players-ui.js
 // Thread 7 – Players view: game context + matchup-aware demo player list +
-// tabbed Season / Last 10 / Last 5 stats card + mini chart.
+// tabbed Season / Last 10 / Last 5 stats card + mini chart + Add to Slip.
 
 (function () {
   const SEASON_API_URL = "/api/stats/season";
@@ -30,6 +30,7 @@
     const gameCtx = document.getElementById("players-game-context");
     const titleEl = document.getElementById("player-card-title");
     const subtitleEl = document.getElementById("player-card-subtitle");
+    const addSlipBtn = document.getElementById("player-add-slip");
 
     if (gameCtx && !gameCtx.dataset.initialized) {
       gameCtx.dataset.initialized = "true";
@@ -45,6 +46,15 @@
       subtitleEl.dataset.initialized = "true";
       subtitleEl.textContent =
         "Select a player from the list above. We'll show their stats here for Season, Last 10, and Last 5 once the backend is wired.";
+    }
+
+    if (addSlipBtn && !addSlipBtn.dataset.bound) {
+      addSlipBtn.dataset.bound = "true";
+      addSlipBtn.addEventListener("click", () => {
+        handleAddToSlipClick();
+      });
+      addSlipBtn.disabled = true;
+      addSlipBtn.textContent = "Add to Slip (Disabled · No Player)";
     }
 
     ensureTabsInitialized();
@@ -353,6 +363,7 @@
       setStatValuesFromObject({});
       updateChart(null);
       applySubtitle(tab, currentPlayer, false);
+      syncAddSlipButtonDisabled();
       return;
     }
 
@@ -361,21 +372,25 @@
     const placeholderStats = { pts: "—", reb: "—", ast: "—", pra: "—", fg3m: "—" };
     setStatValuesFromObject(placeholderStats);
     updateChart(null);
+    syncAddSlipButtonDisabled();
 
     try {
       const stats = await fetchStatsForTab(currentPlayer.bdlId, tab);
       if (!stats) {
         applySubtitle(tab, currentPlayer, false);
         updateChart(null);
+        syncAddSlipButtonDisabled();
         return;
       }
       setStatValuesFromObject(stats);
       updateChart(stats);
       applySubtitle(tab, currentPlayer, false);
+      syncAddSlipButtonDisabled();
     } catch (err) {
       console.error("Failed to load stats for tab", tab, err);
       applySubtitle(tab, currentPlayer, false);
       updateChart(null);
+      syncAddSlipButtonDisabled();
       // placeholders stay as "—"
     }
   }
@@ -386,6 +401,7 @@
 
     if (!currentPlayer) {
       updateChart(null);
+      syncAddSlipButtonDisabled();
       return;
     }
 
@@ -489,6 +505,123 @@
     });
   }
 
+  // ---------------------------------------------------------------------------
+  // Pick Slip wiring
+  // ---------------------------------------------------------------------------
+
+  function currentTabLabelShort() {
+    if (currentTab === "last10") return "L10";
+    if (currentTab === "last5") return "L5";
+    return "SEASON";
+  }
+
+  function readStatsFromDom() {
+    const values = {};
+    document.querySelectorAll(".player-stat-value").forEach((el) => {
+      const key = el.dataset.statKey;
+      if (!key) return;
+      const text = (el.textContent || "").trim();
+      const num = parseFloat(text);
+      values[key] = Number.isFinite(num) ? num : null;
+    });
+    return values;
+  }
+
+  function syncAddSlipButtonDisabled() {
+    const btn = document.getElementById("player-add-slip");
+    if (!btn) return;
+
+    if (!currentPlayer) {
+      btn.disabled = true;
+      btn.textContent = "Add to Slip (Disabled · No Player)";
+      return;
+    }
+
+    // If we have at least one numeric stat, enable
+    const stats = readStatsFromDom();
+    const hasNumeric =
+      stats.pts !== null ||
+      stats.reb !== null ||
+      stats.ast !== null ||
+      stats.pra !== null ||
+      stats.fg3m !== null;
+
+    if (hasNumeric) {
+      btn.disabled = false;
+      btn.textContent = "Add to Slip";
+    } else {
+      btn.disabled = true;
+      btn.textContent = "Add to Slip (Disabled · No Stats)";
+    }
+  }
+
+  function handleAddToSlipClick() {
+    if (!currentPlayer) return;
+
+    const btn = document.getElementById("player-add-slip");
+    if (btn && btn.disabled) return;
+
+    const stats = readStatsFromDom();
+    const slipList = document.querySelector(".slip-list");
+    if (!slipList) return;
+
+    // Remove placeholder row if present
+    const placeholder = slipList.querySelector(".slip-placeholder-row");
+    if (placeholder) {
+      placeholder.remove();
+    }
+
+    const tabLabel = currentTabLabelShort();
+    const priValue =
+      stats.pra ??
+      stats.pts ??
+      stats.reb ??
+      stats.ast ??
+      stats.fg3m ??
+      null;
+
+    const title = `${currentPlayer.name} · ${tabLabel} PRA`;
+    const tagText = `${currentPlayer.team} · ${tabLabel}`;
+
+    const li = document.createElement("li");
+    li.className = "slip-row";
+
+    const header = document.createElement("div");
+    header.className = "slip-row-header";
+
+    const titleEl = document.createElement("span");
+    titleEl.className = "slip-row-title";
+    titleEl.textContent =
+      priValue !== null ? `${title} ${priValue.toFixed(1)}` : title;
+
+    const tagEl = document.createElement("span");
+    tagEl.className = "slip-row-tag";
+    tagEl.textContent = tagText;
+
+    header.appendChild(titleEl);
+    header.appendChild(tagEl);
+
+    const sub = document.createElement("div");
+    sub.className = "slip-row-sub";
+    sub.textContent =
+      [
+        stats.pts !== null ? `PTS ${stats.pts.toFixed(1)}` : null,
+        stats.reb !== null ? `REB ${stats.reb.toFixed(1)}` : null,
+        stats.ast !== null ? `AST ${stats.ast.toFixed(1)}` : null,
+        stats.fg3m !== null ? `3PM ${stats.fg3m.toFixed(1)}` : null,
+      ]
+        .filter(Boolean)
+        .join(" · ") || "No numeric stats available";
+
+    li.appendChild(header);
+    li.appendChild(sub);
+    slipList.appendChild(li);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Public entry: openPlayersForGame
+  // ---------------------------------------------------------------------------
+
   /**
    * Public helper: open the Players view for a given game label.
    * Called from games-today-ui.js when a user clicks "Players & Stats".
@@ -511,6 +644,7 @@
     applySubtitle(currentTab, currentPlayer, false);
     setStatValuesFromObject({});
     updateChart(null);
+    syncAddSlipButtonDisabled();
 
     ensureTabsInitialized();
     updateTabActiveClasses();
