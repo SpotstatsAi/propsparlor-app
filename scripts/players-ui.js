@@ -1,6 +1,6 @@
 // scripts/players-ui.js
 // Thread 7 – Players view: game context + demo player list +
-// tabbed Season / Last 10 / Last 5 stats card.
+// tabbed Season / Last 10 / Last 5 stats card + mini chart.
 
 (function () {
   const SEASON_API_URL = "/api/stats/season";
@@ -40,10 +40,11 @@
     if (subtitleEl && !subtitleEl.dataset.initialized) {
       subtitleEl.dataset.initialized = "true";
       subtitleEl.textContent =
-        "Select a player from the list above. We'll show their season averages here once the backend is wired.";
+        "Select a player from the list above. We'll show their stats here for Season, Last 10, and Last 5 once the backend is wired.";
     }
 
     ensureTabsInitialized();
+    updateChart(null);
   }
 
   function switchToPlayersView() {
@@ -73,7 +74,7 @@
 
     const tabs = document.createElement("div");
     tabs.className = "player-tabs";
-    // inline styles so we don't have to touch main.css
+    // inline layout so we don't need extra CSS changes
     tabs.style.display = "flex";
     tabs.style.gap = "6px";
     tabs.style.marginTop = "4px";
@@ -160,6 +161,90 @@
     if (pts === null || reb === null || ast === null) return null;
     return pts + reb + ast;
   }
+
+  // ---------- Mini chart ----------
+
+  function updateChart(statsObj) {
+    const bodyEl = document.getElementById("player-chart-body");
+    if (!bodyEl) return;
+
+    bodyEl.innerHTML = "";
+
+    const order = [
+      { key: "pts", label: "PTS" },
+      { key: "reb", label: "REB" },
+      { key: "ast", label: "AST" },
+      { key: "pra", label: "PRA" },
+      { key: "fg3m", label: "3PM" },
+    ];
+
+    if (!statsObj) {
+      const placeholder = document.createElement("div");
+      placeholder.textContent =
+        "Chart will appear here once stats are available for this tab.";
+      placeholder.style.fontSize = "0.75rem";
+      placeholder.style.opacity = "0.8";
+      bodyEl.appendChild(placeholder);
+      return;
+    }
+
+    // Collect numeric values and find max
+    const values = order.map((entry) => {
+      const raw = statsObj[entry.key];
+      const num = toNum(raw);
+      return num;
+    });
+
+    const numericValues = values.filter((v) => v !== null);
+    if (numericValues.length === 0) {
+      const placeholder = document.createElement("div");
+      placeholder.textContent = "No numeric stats available for this tab.";
+      placeholder.style.fontSize = "0.75rem";
+      placeholder.style.opacity = "0.8";
+      bodyEl.appendChild(placeholder);
+      return;
+    }
+
+    const maxVal = Math.max(...numericValues);
+
+    order.forEach((entry, idx) => {
+      const value = values[idx];
+      const rowEl = document.createElement("div");
+      rowEl.className = "player-chart-row";
+
+      const labelEl = document.createElement("span");
+      labelEl.className = "player-chart-label";
+      labelEl.textContent = entry.label;
+
+      const trackEl = document.createElement("div");
+      trackEl.className = "player-chart-bar-track";
+
+      const fillEl = document.createElement("div");
+      fillEl.className = "player-chart-bar-fill";
+
+      if (value === null || maxVal === 0) {
+        fillEl.style.transform = "scaleX(0)";
+      } else {
+        const ratio = Math.max(0.05, Math.min(1, value / maxVal));
+        fillEl.style.transform = `scaleX(${ratio})`;
+      }
+
+      trackEl.appendChild(fillEl);
+
+      const valEl = document.createElement("span");
+      valEl.className = "player-chart-value";
+      valEl.textContent =
+        value === null ? "—" : value.toFixed(1);
+
+      rowEl.appendChild(labelEl);
+      rowEl.appendChild(trackEl);
+      rowEl.appendChild(valEl);
+
+      bodyEl.appendChild(rowEl);
+    });
+  }
+
+  // ---------- Tab text helpers ----------
 
   function subtitleForTab(tab, player, isLoading) {
     if (!player) {
@@ -257,38 +342,44 @@
   async function renderTabStats(tab) {
     if (!currentPlayer || !currentPlayer.bdlId) {
       setStatValuesFromObject({});
+      updateChart(null);
       applySubtitle(tab, currentPlayer, false);
       return;
     }
 
     applySubtitle(tab, currentPlayer, true);
     // show placeholders while loading
-    setStatValuesFromObject({ pts: "—", reb: "—", ast: "—", pra: "—", fg3m: "—" });
+    const placeholderStats = { pts: "—", reb: "—", ast: "—", pra: "—", fg3m: "—" };
+    setStatValuesFromObject(placeholderStats);
+    updateChart(null);
 
     try {
       const stats = await fetchStatsForTab(currentPlayer.bdlId, tab);
       if (!stats) {
-        // leave the placeholders but don't show the "unable to load" hard error
         applySubtitle(tab, currentPlayer, false);
+        updateChart(null);
         return;
       }
       setStatValuesFromObject(stats);
+      updateChart(stats);
       applySubtitle(tab, currentPlayer, false);
     } catch (err) {
       console.error("Failed to load stats for tab", tab, err);
       applySubtitle(tab, currentPlayer, false);
+      updateChart(null);
       // placeholders stay as "—"
     }
   }
 
   function onTabClick(tabId) {
-    if (!currentPlayer) {
-      currentTab = tabId;
-      updateTabActiveClasses();
-      return;
-    }
     currentTab = tabId;
     updateTabActiveClasses();
+
+    if (!currentPlayer) {
+      updateChart(null);
+      return;
+    }
+
     renderTabStats(currentTab);
   }
 
@@ -314,7 +405,7 @@
       btn.textContent = `${player.name} · ${player.team}`;
 
       btn.addEventListener("click", () => {
-        // Mark active pill in the player list
+        // Mark active pill in the player list (but not the tab pills)
         document
           .querySelectorAll(".player-pill")
           .forEach((el) => {
@@ -355,6 +446,7 @@
 
     ensureTabsInitialized();
     updateTabActiveClasses();
+    updateChart(null);
     renderDemoPlayers(gameLabel);
   }
 
