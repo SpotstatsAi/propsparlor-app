@@ -1,5 +1,5 @@
 // /functions/api/stats/season.js
-// GET /api/stats/season?player_id=123&season=2024
+// Route: GET /api/stats/season?player_id=123&season=2024
 
 function jsonResponse(body, init = {}) {
   const status = init.status || 200;
@@ -7,8 +7,8 @@ function jsonResponse(body, init = {}) {
     status,
     headers: {
       "Content-Type": "application/json",
-      ...(init.headers || {}),
-    },
+      ...(init.headers || {})
+    }
   });
 }
 
@@ -16,7 +16,7 @@ function errorResponse(status, code, message) {
   return jsonResponse(
     {
       ok: false,
-      error: { code, message },
+      error: { code, message }
     },
     { status }
   );
@@ -46,11 +46,19 @@ export async function onRequest(context) {
 
   const apiKey = env.BDL_API_KEY;
   if (!apiKey) {
-    return errorResponse(500, "CONFIG_ERROR", "BDL_API_KEY missing.");
+    return errorResponse(500, "CONFIG_ERROR", "BDL_API_KEY is missing.");
   }
 
-  // NEW CORRECT ENDPOINT
-  const bdlUrl = new URL("https://api.balldontlie.io/v1/season_averages");
+  //
+  // FINAL + CORRECT ENDPOINT (from OpenAPI spec)
+  //
+  //   GET https://api.balldontlie.io/player_season_stats
+  //   ?season=2024
+  //   &player_ids[]=237
+  //
+  // Not /nba/v1/..., not /season_averages.
+  //
+  const bdlUrl = new URL("https://api.balldontlie.io/player_season_stats");
   bdlUrl.searchParams.set("season", String(seasonNum));
   bdlUrl.searchParams.append("player_ids[]", String(playerIdNum));
 
@@ -60,18 +68,18 @@ export async function onRequest(context) {
       method: "GET",
       headers: {
         Accept: "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
+        Authorization: `Bearer ${apiKey}`
+      }
     });
   } catch {
-    return errorResponse(502, "UPSTREAM_FETCH_FAILED", "Failed to reach BDL.");
+    return errorResponse(502, "UPSTREAM_FETCH_FAILED", "Failed to reach BallDontLie.");
   }
 
   if (!upstream.ok) {
     return errorResponse(
       502,
       "UPSTREAM_ERROR",
-      `BDL returned ${upstream.status}`
+      `BallDontLie returned status ${upstream.status}.`
     );
   }
 
@@ -79,24 +87,24 @@ export async function onRequest(context) {
   try {
     raw = await upstream.json();
   } catch {
-    return errorResponse(502, "PARSE_ERROR", "Invalid JSON from BDL.");
+    return errorResponse(502, "PARSE_ERROR", "Invalid JSON returned by BallDontLie.");
   }
 
   const rows = raw.data || [];
 
   if (!rows.length) {
-    return errorResponse(404, "NOT_FOUND", "No season averages found.");
+    return errorResponse(404, "NOT_FOUND", "No season stats found for this player & season.");
   }
 
   return jsonResponse({
     ok: true,
     player_id: playerIdNum,
     season: seasonNum,
-    data: rows[0], 
+    data: rows[0],   // BallDontLie returns a single season-average object
     meta: {
       source: "balldontlie",
       sport: "nba",
-      endpoint: "season_averages",
-    },
+      endpoint: "player_season_stats"
+    }
   });
 }
