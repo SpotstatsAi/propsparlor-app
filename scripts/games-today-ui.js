@@ -1,5 +1,6 @@
 // scripts/games-today-ui.js
 // Wires the "Today's Games" view to /api/stats/games-today without touching layout.
+// Thread 7: Clicking a game routes into Players & Props via window.PropsParlor.openPlayersForGame()
 
 (function () {
   // Use the existing Worker route: /api/stats/games-today
@@ -87,6 +88,21 @@
     wrapperEl.style.display = hasData ? "" : "none";
   }
 
+  function onGameClick(gameLabel) {
+    // Route to players view if the handler exists (Thread 7).
+    if (
+      window.PropsParlor &&
+      typeof window.PropsParlor.openPlayersForGame === "function"
+    ) {
+      window.PropsParlor.openPlayersForGame(gameLabel);
+      return;
+    }
+
+    // Fallback: switch view by clicking nav (if present).
+    const navBtn = document.querySelector('.nav-item[data-view="players"]');
+    if (navBtn) navBtn.click();
+  }
+
   function renderGames(games) {
     const tbody = getEl("games-today-body");
     if (!tbody) return;
@@ -98,18 +114,22 @@
     }
 
     const rows = games
-      .map((game) => {
+      .map((game, idx) => {
         const matchup = formatMatchup(game);
         const tipoff = formatTipoff(game.date || game.tipoff || game.time);
         const status = formatStatus(game);
 
         return `
-          <tr>
+          <tr data-game-index="${idx}">
             <td>${matchup}</td>
             <td>${tipoff}</td>
             <td>${status}</td>
             <td style="text-align: right;">
-              <button type="button" class="games-table-cta">
+              <button
+                type="button"
+                class="games-table-cta"
+                data-game-label="${matchup.replace(/"/g, "&quot;")}"
+              >
                 View props / stats
               </button>
             </td>
@@ -119,6 +139,22 @@
       .join("");
 
     tbody.innerHTML = rows;
+
+    // Bind click handlers (event delegation)
+    tbody.addEventListener(
+      "click",
+      (e) => {
+        const btn = e.target && e.target.closest
+          ? e.target.closest(".games-table-cta")
+          : null;
+        if (!btn) return;
+
+        const label = btn.getAttribute("data-game-label") || "Game selected";
+        onGameClick(label);
+      },
+      { passive: true }
+    );
+
     showState({ loading: false, error: false, empty: false, hasData: true });
   }
 
