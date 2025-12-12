@@ -1,155 +1,284 @@
-/* ---------------------------------------------
-   Thread 7 — Players & Props UI (Vegas styling)
-   --------------------------------------------- */
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  />
+  <title>PropsParlor – Hello Vegas</title>
+  <link rel="stylesheet" href="styles/main.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="logo-mark">PP</div>
+      <div class="header-text">
+        <h1>PropsParlor</h1>
+        <p class="tagline">NBA Props · Vegas Vibes · Data Driven</p>
+      </div>
+      <div class="header-meta">
+        <span class="header-pill">Thread 1 · UI Shell</span>
+      </div>
+    </header>
 
-.players-layout {
-  display: grid;
-  grid-template-columns: 1fr 1.25fr;
-  gap: 14px;
-  margin-top: 12px;
-}
+    <main class="app-main">
+      <div class="layout-grid">
+        <!-- LEFT: NAV / SECTIONS -->
+        <aside class="sidebar sidebar-left">
+          <div class="sidebar-group">
+            <div class="sidebar-label">Navigation</div>
+            <button class="nav-item nav-item-active" data-view="overview">
+              Overview
+            </button>
+            <button class="nav-item" data-view="games">
+              Today&apos;s Games
+            </button>
+            <button class="nav-item" data-view="players">
+              Players &amp; Props
+            </button>
+            <button class="nav-item" data-view="trends">
+              Trends &amp; Tools
+            </button>
+          </div>
 
-.players-list-shell {
-  padding: 10px 10px 12px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: radial-gradient(circle at top left, rgba(18, 26, 68, 0.55), rgba(4, 4, 18, 0.92));
-  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.55);
-}
+          <div class="sidebar-group">
+            <div class="sidebar-label">Future Modules</div>
+            <div class="sidebar-chip-row">
+              <span class="sidebar-chip">BDL Sync</span>
+              <span class="sidebar-chip">Matchups</span>
+              <span class="sidebar-chip">Alerts</span>
+            </div>
+          </div>
+        </aside>
 
-.players-list-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
-}
+        <!-- CENTER: MAIN PANEL -->
+        <section class="layout-center">
+          <!-- OVERVIEW VIEW -->
+          <section class="view view-active" data-view-panel="overview">
+            <section class="hero-card">
+              <h2>Hello, Vegas.</h2>
+              <p>
+                This is your base PropsParlor shell. Future threads will plug in
+                live NBA data, prop lines, matchup tools, and auto-built slips.
+              </p>
+              <p class="hero-subcopy">
+                For now, this is a static layout: left navigation, central
+                dashboard, and a right-side pick slip area.
+              </p>
+              <div class="placeholder-pill">
+                Thread 1 · UI Foundation Only
+              </div>
+            </section>
 
-.player-pill {
-  appearance: none;
-  border-radius: 999px;
-  border: 1px solid rgba(0, 255, 180, 0.28);
-  padding: 6px 10px;
-  font-size: 0.78rem;
-  letter-spacing: 0.04em;
-  background: rgba(0, 10, 20, 0.35);
-  color: #e9fbff;
-  cursor: pointer;
-  opacity: 0.92;
-  transition:
-    transform 0.08s ease,
-    box-shadow 0.18s ease,
-    border-color 0.18s ease,
-    background 0.18s ease,
-    opacity 0.15s ease;
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.04),
-    0 0 16px rgba(0, 255, 180, 0.10);
-}
+            <!-- Static system status strip (Thread 1 only) -->
+            <section class="panel panel-status">
+              <div class="panel-header">
+                <span class="panel-title">System Status</span>
+                <span class="panel-tag panel-tag-soft">Thread 1 · Static</span>
+              </div>
+              <div class="status-row">
+                <div class="status-item">
+                  <span class="status-label">Cloudflare Pages</span>
+                  <span class="status-pill status-pill-online">Online</span>
+                  <span class="status-note">Serving UI shell</span>
+                </div>
+                <div class="status-item">
+                  <span class="status-label">Cloudflare Workers</span>
+                  <span class="status-pill status-pill-pending">Not wired</span>
+                  <span class="status-note">Will be added in a later thread</span>
+                </div>
+                <div class="status-item">
+                  <span class="status-label">BDL (GOAT tier)</span>
+                  <span class="status-pill status-pill-pending">Not wired</span>
+                  <span class="status-note">env.BDL_API_KEY reserved for backend</span>
+                </div>
+              </div>
+            </section>
 
-.player-pill:hover {
-  opacity: 1;
-  border-color: rgba(0, 255, 180, 0.55);
-  background: rgba(0, 20, 40, 0.55);
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.08),
-    0 0 22px rgba(0, 255, 180, 0.22);
-  transform: translateY(-0.5px);
-}
+            <section class="panel panel-future">
+              <div class="panel-header">
+                <span class="panel-title">Dashboard Placeholder</span>
+                <span class="panel-tag">Static · No Data Yet</span>
+              </div>
+              <p class="panel-text">
+                This area will host your core views: overview, game slates,
+                player search, and prop breakdowns. In future work, we&apos;ll
+                wire this to Cloudflare Workers and BDL.
+              </p>
+            </section>
+          </section>
 
-.player-pill:active {
-  transform: translateY(0.5px) scale(0.99);
-}
+          <!-- TODAY'S GAMES VIEW -->
+          <section class="view" data-view-panel="games">
+            <section class="panel">
+              <div class="panel-header">
+                <span class="panel-title">Today&apos;s Games</span>
+                <span class="panel-tag panel-tag-soft">Live · BDL Schedule</span>
+              </div>
+              <p class="panel-text">
+                Daily NBA slate: matchups, tipoff times, and links to stats.
+              </p>
 
-.player-pill-active {
-  border-color: rgba(0, 255, 180, 0.85);
-  background: radial-gradient(circle at 0 0, rgba(0, 255, 180, 0.22), rgba(0, 40, 80, 0.55));
-  box-shadow:
-    0 0 14px rgba(0, 255, 180, 0.35),
-    0 0 26px rgba(0, 120, 255, 0.22);
-  opacity: 1;
-}
+              <!-- Loading / error / empty states -->
+              <p id="games-today-loading" class="panel-text">
+                Loading today&apos;s games…
+              </p>
+              <p
+                id="games-today-error"
+                class="panel-text"
+                style="display: none;"
+              >
+                Unable to load today&apos;s games. Please refresh to try again.
+              </p>
+              <p
+                id="games-today-empty"
+                class="panel-text"
+                style="display: none;"
+              >
+                No NBA games scheduled for today.
+              </p>
 
-/* Tabs (Season / L10 / L5) use the same pill system */
-.player-tabs .player-pill {
-  padding: 5px 10px;
-  font-size: 0.74rem;
-}
+              <!-- Table wrapper -->
+              <div
+                id="games-today-wrapper"
+                class="games-table-wrapper"
+                style="display: none;"
+              >
+                <table class="games-table">
+                  <thead>
+                    <tr>
+                      <th>Matchup</th>
+                      <th>Tipoff</th>
+                      <th>Status</th>
+                      <th style="text-align: right;">Props / Stats</th>
+                    </tr>
+                  </thead>
+                  <tbody id="games-today-body">
+                    <!-- Filled by JS -->
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </section>
 
-.player-card-shell {
-  padding: 12px 12px 14px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: radial-gradient(circle at top left, rgba(18, 26, 68, 0.45), rgba(4, 4, 18, 0.92));
-  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.55);
-}
+          <!-- PLAYERS & PROPS VIEW -->
+          <section class="view" data-view-panel="players">
+            <section class="panel">
+              <div class="panel-header">
+                <span class="panel-title">Players &amp; Props</span>
+                <span class="panel-tag panel-tag-soft">Thread 7 · Browse</span>
+              </div>
 
-.player-stats-grid {
-  display: grid;
-  gap: 8px;
-  margin-top: 10px;
-}
+              <p class="panel-text" id="players-game-context">
+                Select a game to view players.
+              </p>
 
-.player-stat-row {
-  --fill: 0%;
-  position: relative;
-  display: grid;
-  grid-template-columns: 64px 1fr;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 10px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(0, 0, 0, 0.18);
-  cursor: pointer;
-  overflow: hidden;
-}
+              <div class="players-layout">
+                <!-- LEFT: players list -->
+                <div class="players-list-shell">
+                  <p class="panel-text" id="players-list-intro">
+                    Demo key players will appear here after selecting a game.
+                  </p>
+                  <div id="players-list-grid" class="players-list-grid">
+                    <!-- Filled by players-ui.js -->
+                  </div>
+                </div>
 
-.player-stat-row::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  width: var(--fill);
-  background: radial-gradient(circle at 0 0, rgba(0, 255, 180, 0.22), rgba(0, 120, 255, 0.10));
-  opacity: 0.9;
-  pointer-events: none;
-}
+                <!-- RIGHT: player card -->
+                <div class="player-card-shell">
+                  <div class="panel-header" style="margin-bottom: 6px;">
+                    <span class="panel-title" id="player-card-title">No player selected</span>
+                    <span class="panel-tag panel-tag-soft">Core Stats</span>
+                  </div>
 
-.player-stat-row > * {
-  position: relative;
-}
+                  <p class="panel-text" id="player-card-subtitle">
+                    Select a player from the list above.
+                  </p>
 
-.player-stat-label {
-  font-size: 0.72rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  opacity: 0.9;
-}
+                  <div class="player-stats-grid">
+                    <div class="player-stat-row">
+                      <div class="player-stat-label">PTS</div>
+                      <div class="player-stat-value" data-stat-key="pts">—</div>
+                    </div>
+                    <div class="player-stat-row">
+                      <div class="player-stat-label">REB</div>
+                      <div class="player-stat-value" data-stat-key="reb">—</div>
+                    </div>
+                    <div class="player-stat-row">
+                      <div class="player-stat-label">AST</div>
+                      <div class="player-stat-value" data-stat-key="ast">—</div>
+                    </div>
+                    <div class="player-stat-row">
+                      <div class="player-stat-label">PRA</div>
+                      <div class="player-stat-value" data-stat-key="pra">—</div>
+                    </div>
+                    <div class="player-stat-row">
+                      <div class="player-stat-label">3PM</div>
+                      <div class="player-stat-value" data-stat-key="fg3m">—</div>
+                    </div>
+                  </div>
 
-.player-stat-value {
-  font-size: 0.92rem;
-  font-weight: 650;
-  letter-spacing: 0.02em;
-}
+                  <button id="player-add-slip" class="slip-button" type="button" disabled>
+                    Add to Slip (Disabled · No Player)
+                  </button>
+                </div>
+              </div>
+            </section>
+          </section>
 
-.player-stat-row-active {
-  border-color: rgba(0, 255, 180, 0.70);
-  box-shadow: 0 0 18px rgba(0, 255, 180, 0.22);
-}
+          <!-- TRENDS & TOOLS VIEW -->
+          <section class="view" data-view-panel="trends">
+            <section class="panel">
+              <div class="panel-header">
+                <span class="panel-title">Trends &amp; Tools Shell</span>
+                <span class="panel-tag panel-tag-soft">Static · Thread 1</span>
+              </div>
+              <p class="panel-text">
+                This space is reserved for advanced views: team vs. position
+                stats, pace and efficiency charts, and any custom tools you want
+                to give yourself an edge.
+              </p>
+              <p class="panel-text">
+                Right now, it&apos;s a placeholder panel so that your nav feels
+                real even before data and charts are connected.
+              </p>
+            </section>
+          </section>
+        </section>
 
-/* Enable the Add to Slip button (your JS toggles disabled) */
-#player-add-slip.slip-button {
-  cursor: pointer;
-  opacity: 0.95;
-}
+        <!-- RIGHT: PICK SLIP SHELL -->
+        <aside class="sidebar sidebar-right">
+          <div class="panel slip-panel">
+            <div class="panel-header">
+              <span class="panel-title">Pick Slip</span>
+              <span class="panel-tag panel-tag-soft">Coming Soon</span>
+            </div>
+            <p class="panel-text">
+              This will be your slip builder: selected props, odds, and
+              parlay summary before sending to your sportsbook.
+            </p>
+            <ul class="slip-list">
+              <li class="slip-placeholder-row">
+                <span class="slip-placeholder-label">No picks added</span>
+                <span class="slip-placeholder-sub">Future: click a prop to send it here.</span>
+              </li>
+            </ul>
+            <button class="slip-button" disabled>
+              Build Parlay (Disabled · Thread 1)
+            </button>
+          </div>
+        </aside>
+      </div>
+    </main>
 
-#player-add-slip.slip-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
+    <footer class="app-footer">
+      <span>PropsParlor · UI Shell Only · Powered by Cloudflare Pages</span>
+    </footer>
+  </div>
 
-/* Responsive */
-@media (max-width: 960px) {
-  .players-layout {
-    grid-template-columns: 1fr;
-  }
-}
+  <script src="scripts/main.js"></script>
+  <script src="scripts/games-today-ui.js"></script>
+  <script src="scripts/players-ui.js"></script>
+</body>
+</html>
