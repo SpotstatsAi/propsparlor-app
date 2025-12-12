@@ -193,6 +193,21 @@
               </p>
             </section>
 
+            <!-- Player list panel -->
+            <section class="panel">
+              <div class="panel-header">
+                <span class="panel-title">Likely Starters / Key Players</span>
+                <span class="panel-tag panel-tag-soft">Demo List · Thread 7</span>
+              </div>
+              <p id="players-list-intro" class="panel-text">
+                When you select a game, we&apos;ll show a demo list of key players here.
+                In a later thread this will use real rosters from BDL.
+              </p>
+              <div id="players-list-grid" class="players-list-grid">
+                <!-- Filled by JS -->
+              </div>
+            </section>
+
             <!-- Player stats shell (wired to /api/stats/season in later steps) -->
             <section class="panel">
               <div class="panel-header">
@@ -202,8 +217,8 @@
               <div class="player-card-shell">
                 <h3 id="player-card-title">No player selected</h3>
                 <p id="player-card-subtitle" class="panel-text">
-                  When you click a player, we&apos;ll pull their season averages from
-                  /api/stats/season and show core props like PTS, REB, AST, PRA, and 3PM.
+                  Select a player from the list above. We&apos;ll show their core season
+                  averages here once the backend is wired to /api/stats/season.
                 </p>
                 <div class="player-stats-grid">
                   <div class="player-stat-row">
