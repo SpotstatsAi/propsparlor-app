@@ -1,5 +1,5 @@
 // /functions/api/stats/season.js
-// Route: GET /api/stats/season?player_id=123&season=2024
+// GET /api/stats/season?player_id=123&season=2024
 
 function jsonResponse(body, init = {}) {
   const status = init.status || 200;
@@ -30,51 +30,27 @@ export async function onRequest(context) {
   const seasonParam = url.searchParams.get("season");
 
   if (!playerIdParam) {
-    return errorResponse(
-      400,
-      "BAD_REQUEST",
-      "Query parameter 'player_id' is required."
-    );
+    return errorResponse(400, "BAD_REQUEST", "`player_id` is required.");
   }
 
   const playerIdNum = Number(playerIdParam);
   if (!Number.isInteger(playerIdNum) || playerIdNum <= 0) {
-    return errorResponse(
-      400,
-      "BAD_REQUEST",
-      "Query parameter 'player_id' must be a positive integer."
-    );
+    return errorResponse(400, "BAD_REQUEST", "`player_id` must be a positive integer.");
   }
 
   if (!seasonParam) {
-    return errorResponse(
-      400,
-      "BAD_REQUEST",
-      "Query parameter 'season' is required (e.g., 2024)."
-    );
+    return errorResponse(400, "BAD_REQUEST", "`season` is required.");
   }
 
   const seasonNum = Number(seasonParam);
-  if (!Number.isInteger(seasonNum) || seasonNum < 1979) {
-    return errorResponse(
-      400,
-      "BAD_REQUEST",
-      "Query parameter 'season' must be a valid year (e.g., 2024)."
-    );
-  }
 
   const apiKey = env.BDL_API_KEY;
   if (!apiKey) {
-    return errorResponse(
-      500,
-      "CONFIG_ERROR",
-      "BDL_API_KEY is not configured in the environment."
-    );
+    return errorResponse(500, "CONFIG_ERROR", "BDL_API_KEY missing.");
   }
 
-  const bdlUrl = new URL(
-    "https://api.balldontlie.io/nba/v1/player_season_stats"
-  );
+  // NEW CORRECT ENDPOINT
+  const bdlUrl = new URL("https://api.balldontlie.io/v1/season_averages");
   bdlUrl.searchParams.set("season", String(seasonNum));
   bdlUrl.searchParams.append("player_ids[]", String(playerIdNum));
 
@@ -88,18 +64,14 @@ export async function onRequest(context) {
       },
     });
   } catch {
-    return errorResponse(
-      502,
-      "UPSTREAM_FETCH_FAILED",
-      "Failed to reach BALLDONTLIE player season stats endpoint."
-    );
+    return errorResponse(502, "UPSTREAM_FETCH_FAILED", "Failed to reach BDL.");
   }
 
   if (!upstream.ok) {
     return errorResponse(
       502,
       "UPSTREAM_ERROR",
-      `BALLDONTLIE player season stats endpoint returned status ${upstream.status}.`
+      `BDL returned ${upstream.status}`
     );
   }
 
@@ -107,67 +79,24 @@ export async function onRequest(context) {
   try {
     raw = await upstream.json();
   } catch {
-    return errorResponse(
-      502,
-      "UPSTREAM_PARSE_FAILED",
-      "Unable to parse BALLDONTLIE player season stats response as JSON."
-    );
+    return errorResponse(502, "PARSE_ERROR", "Invalid JSON from BDL.");
   }
 
-  const rows = Array.isArray(raw.data) ? raw.data : [];
-  if (rows.length === 0) {
-    return errorResponse(
-      404,
-      "NOT_FOUND",
-      "No season stats found for the given player and season."
-    );
+  const rows = raw.data || [];
+
+  if (!rows.length) {
+    return errorResponse(404, "NOT_FOUND", "No season averages found.");
   }
-
-  const s = rows[0];
-
-  const clean = {
-    season: s.season ?? seasonNum,
-    player_id: s.player_id ?? playerIdNum,
-    team_id: s.team_id ?? null,
-
-    games_played: s.games_played ?? null,
-    games_started: s.games_started ?? null,
-
-    min: s.min ?? null,
-
-    fgm: s.fgm ?? null,
-    fga: s.fga ?? null,
-    fg_pct: s.fg_pct ?? null,
-
-    fg3m: s.fg3m ?? null,
-    fg3a: s.fg3a ?? null,
-    fg3_pct: s.fg3_pct ?? null,
-
-    ftm: s.ftm ?? null,
-    fta: s.fta ?? null,
-    ft_pct: s.ft_pct ?? null,
-
-    oreb: s.oreb ?? null,
-    dreb: s.dreb ?? null,
-    reb: s.reb ?? null,
-
-    ast: s.ast ?? null,
-    stl: s.stl ?? null,
-    blk: s.blk ?? null,
-    turnover: s.turnover ?? null,
-    pf: s.pf ?? null,
-    pts: s.pts ?? null,
-  };
 
   return jsonResponse({
     ok: true,
     player_id: playerIdNum,
     season: seasonNum,
-    data: clean,
+    data: rows[0], 
     meta: {
       source: "balldontlie",
       sport: "nba",
-      endpoint: "stats.season",
+      endpoint: "season_averages",
     },
   });
 }
