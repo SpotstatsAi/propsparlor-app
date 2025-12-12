@@ -1,13 +1,19 @@
-// functions/api/health.js
-// Cloudflare Pages Function for /api/health
-// Responds with simple JSON so we know the backend is wired up.
+// /functions/api/health.js
+// Route: GET /api/health
+// Simple test endpoint
 
 export async function onRequest() {
-  const body = JSON.stringify({ status: "ok" });
-
-  return new Response(body, {
-    headers: {
-      "Content-Type": "application/json",
-    },
-  });
+  return new Response(
+    JSON.stringify({
+      ok: true,
+      status: "ok",
+      service: "propsparlor-api",
+    }),
+    {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }
+  );
 }
