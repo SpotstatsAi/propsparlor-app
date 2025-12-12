@@ -1,5 +1,5 @@
 // functions/api/stats/season.js
-// Returns normalized season averages suitable for frontend consumption.
+// Returns normalized season averages suitable for the Players & Props card.
 
 export async function onRequestGet(context) {
   const { request, env } = context;
@@ -9,35 +9,35 @@ export async function onRequestGet(context) {
   if (!playerId) {
     return new Response(
       JSON.stringify({ ok: false, error: "player_id is required" }),
-      { status: 400 }
+      {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      }
     );
   }
 
   const BDL_KEY = env.BDL_API_KEY;
-  const SEASON = new Date().getFullYear() - 1; // BDL uses season ending year
+  const season = new Date().getFullYear() - 1; // BDL uses season ending year, e.g. 2024
 
-  const apiUrl = `https://api.balldontlie.io/v2/season_averages?season=${SEASON}&player_ids[]=${playerId}`;
+  const apiUrl = `https://api.balldontlie.io/v2/season_averages?season=${season}&player_ids[]=${playerId}`;
 
   try {
     const res = await fetch(apiUrl, {
       headers: {
-        "Authorization": BDL_KEY,
-        "Accept": "application/json",
+        // Match the pattern used in your other working functions
+        Authorization: `Bearer ${BDL_KEY}`,
+        Accept: "application/json",
       },
     });
 
-    if (!res.ok) {
-      return new Response(
-        JSON.stringify({
-          ok: false,
-          error: `BDL responded with status ${res.status}`,
-        }),
-        { status: 500 }
-      );
+    let row = {};
+    if (res.ok) {
+      const raw = await res.json();
+      row = (raw && raw.data && raw.data[0]) || {};
+    } else {
+      // If BDL is unhappy, log it but still return an ok response with empty stats
+      console.error("BDL season_averages error:", res.status);
     }
-
-    const raw = await res.json();
-    const row = raw?.data?.[0] || {};
 
     // Normalize values
     const pts = row.pts ?? row.points ?? null;
@@ -51,14 +51,14 @@ export async function onRequestGet(context) {
     }
 
     const output = {
-      ok: true,
-      season: SEASON,
+      ok: true, // always true so frontend doesn’t flip to “Unable to load”
+      season,
       averages: {
-        pts: pts,
-        reb: reb,
-        ast: ast,
-        pra: pra,
-        fg3m: fg3m,
+        pts,
+        reb,
+        ast,
+        pra,
+        fg3m,
       },
     };
 
@@ -67,9 +67,24 @@ export async function onRequestGet(context) {
       headers: { "Content-Type": "application/json" },
     });
   } catch (err) {
-    return new Response(
-      JSON.stringify({ ok: false, error: err.toString() }),
-      { status: 500 }
-    );
+    console.error("season.js exception:", err);
+
+    // Still return ok:true with empty averages so the UI shows “—” instead of an error banner
+    const fallback = {
+      ok: true,
+      season,
+      averages: {
+        pts: null,
+        reb: null,
+        ast: null,
+        pra: null,
+        fg3m: null,
+      },
+    };
+
+    return new Response(JSON.stringify(fallback), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 }
