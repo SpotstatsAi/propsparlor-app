@@ -1,5 +1,7 @@
 // propsparlor-app/scripts/games-today-ui.js
-// Renders Today's Games table and wires "Players & Stats" CTA into Players view.
+// Today’s Games UI: renders the slate table and wires Players & Stats -> Players view.
+// Fixes: (1) ensures CTA uses .games-table-cta styling (no white default buttons)
+//        (2) cleans tipoff rendering so you don't see duplicated timestamps
 
 (function () {
   const ENDPOINT = "/api/stats/games-today";
@@ -13,85 +15,115 @@
     el.style.display = yes ? "" : "none";
   }
 
-  function toMatchupLabel(game) {
-    const away = (game?.visitor_team?.abbreviation || game?.away_team?.abbreviation || "AWY").toUpperCase();
-    const home = (game?.home_team?.abbreviation || "HME").toUpperCase();
+  function safeText(v, fallback = "—") {
+    const s = (v ?? "").toString().trim();
+    return s.length ? s : fallback;
+  }
+
+  function parseDate(val) {
+    if (!val) return null;
+    const d = new Date(val);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  function formatTipoff(game) {
+    // Prefer a single actual start time if present
+    const candidates = [
+      game?.date,
+      game?.start_time,
+      game?.startTime,
+      game?.scheduled,
+      game?.tipoff,
+      game?.tipoff_time,
+    ];
+
+    for (const c of candidates) {
+      const d = parseDate(c);
+      if (!d) continue;
+
+      // Format: "Dec 12, 7:30 PM" (local)
+      return d.toLocaleString(undefined, {
+        month: "short",
+        day: "2-digit",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+    }
+
+    return "TBD";
+  }
+
+  function formatStatus(game) {
+    // Keep simple: if API gives a status string, show it; else TBD.
+    const candidates = [game?.status, game?.game_status, game?.state];
+    for (const c of candidates) {
+      const s = (c ?? "").toString().trim();
+      if (s) return s;
+    }
+    return "TBD";
+  }
+
+  function matchupLabel(game) {
+    const away =
+      (game?.visitor_team?.abbreviation ||
+        game?.away_team?.abbreviation ||
+        game?.away_team_abbr ||
+        "AWY").toString().toUpperCase();
+
+    const home =
+      (game?.home_team?.abbreviation ||
+        game?.home_team_abbr ||
+        "HME").toString().toUpperCase();
+
     return `${away} @ ${home}`;
   }
 
-  function toTipoff(game) {
-    const raw =
-      game?.date ||
-      game?.start_time ||
-      game?.startTime ||
-      game?.scheduled ||
-      null;
+  function buildCTA(matchup) {
+    const btn = document.createElement("button");
+    btn.type = "button";
 
-    if (!raw) return "TBD";
+    // CRITICAL: this is what prevents the white default button
+    btn.className = "games-table-cta";
 
-    const d = new Date(raw);
-    if (Number.isNaN(d.getTime())) return "TBD";
+    btn.textContent = "Players & Stats";
 
-    // Keep it simple and consistent; you can localize later
-    return d.toISOString();
-  }
+    btn.addEventListener("click", () => {
+      try {
+        localStorage.setItem("pp:selectedGame", matchup);
+      } catch (_) {}
 
-  function toStatus(game) {
-    // Use whatever field is available; fall back cleanly
-    const s =
-      game?.status ||
-      game?.game_status ||
-      game?.state ||
-      null;
+      if (window.PropsParlor && typeof window.PropsParlor.openPlayersForGame === "function") {
+        window.PropsParlor.openPlayersForGame(matchup);
+      }
+    });
 
-    return s ? String(s) : "TBD";
+    return btn;
   }
 
   function buildRow(game) {
     const tr = document.createElement("tr");
 
-    const matchup = toMatchupLabel(game);
-    const tipoff = toTipoff(game);
-    const status = toStatus(game);
+    const matchup = matchupLabel(game);
+    const tipoff = formatTipoff(game);
+    const status = formatStatus(game);
 
     const tdMatchup = document.createElement("td");
-    tdMatchup.textContent = matchup;
+    tdMatchup.textContent = safeText(matchup);
 
-    const tdTip = document.createElement("td");
-    tdTip.textContent = tipoff;
+    const tdTipoff = document.createElement("td");
+    tdTipoff.textContent = safeText(tipoff);
 
     const tdStatus = document.createElement("td");
-    tdStatus.textContent = status;
+    tdStatus.textContent = safeText(status);
 
-    const tdCta = document.createElement("td");
-    tdCta.style.textAlign = "right";
-
-    // IMPORTANT: apply your styled class so it doesn't render white/default
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "games-table-cta";
-    btn.textContent = "Players & Stats";
-
-    btn.addEventListener("click", () => {
-      // Persist selection so Players view can show "From Today's Games"
-      try {
-        localStorage.setItem("pp:selectedGame", matchup);
-      } catch (_) {}
-
-      // Jump to Players view and pre-select matchup
-      if (window.PropsParlor && typeof window.PropsParlor.openPlayersForGame === "function") {
-        window.PropsParlor.openPlayersForGame(matchup);
-      } else {
-        console.warn("PropsParlor.openPlayersForGame is not available yet.");
-      }
-    });
-
-    tdCta.appendChild(btn);
+    const tdCTA = document.createElement("td");
+    tdCTA.style.textAlign = "right";
+    tdCTA.appendChild(buildCTA(matchup));
 
     tr.appendChild(tdMatchup);
-    tr.appendChild(tdTip);
+    tr.appendChild(tdTipoff);
     tr.appendChild(tdStatus);
-    tr.appendChild(tdCta);
+    tr.appendChild(tdCTA);
 
     return tr;
   }
@@ -115,14 +147,13 @@
       const json = await res.json().catch(() => null);
 
       if (!res.ok || !json || json.ok === false) {
-        console.error("games-today error", res.status, json);
+        console.error("games-today upstream error", res.status, json);
         show(loading, false);
         show(error, true);
         return;
       }
 
       const games = json.data?.games || json.games || json.data || [];
-
       if (!Array.isArray(games) || games.length === 0) {
         show(loading, false);
         show(empty, true);
@@ -137,7 +168,7 @@
       show(loading, false);
       show(wrapper, true);
     } catch (e) {
-      console.error("Failed to load games today", e);
+      console.error("games-today fetch failed", e);
       show(loading, false);
       show(error, true);
     }
