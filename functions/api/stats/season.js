@@ -1,16 +1,5 @@
 // /functions/api/stats/season.js
 // Route: GET /api/stats/season?player_id=123&season=2024
-//
-// Uses BALLDONTLIE NBA player season stats endpoint:
-//   GET https://api.balldontlie.io/nba/v1/player_season_stats?season=2024&player_ids[]=123
-//
-// Standard response format:
-//   {
-//     ok: true | false,
-//     data: { ...cleanSeasonStats },
-//     meta: { source, sport, endpoint },
-//     error?: { code, message }
-//   }
 
 function jsonResponse(body, init = {}) {
   const status = init.status || 200;
@@ -18,8 +7,8 @@ function jsonResponse(body, init = {}) {
     status,
     headers: {
       "Content-Type": "application/json",
-      ...(init.headers || {})
-    }
+      ...(init.headers || {}),
+    },
   });
 }
 
@@ -27,7 +16,7 @@ function errorResponse(status, code, message) {
   return jsonResponse(
     {
       ok: false,
-      error: { code, message }
+      error: { code, message },
     },
     { status }
   );
@@ -95,10 +84,10 @@ export async function onRequest(context) {
       method: "GET",
       headers: {
         Accept: "application/json",
-        Authorization: `Bearer ${apiKey}`
-      }
+        Authorization: `Bearer ${apiKey}`,
+      },
     });
-  } catch (err) {
+  } catch {
     return errorResponse(
       502,
       "UPSTREAM_FETCH_FAILED",
@@ -117,7 +106,7 @@ export async function onRequest(context) {
   let raw;
   try {
     raw = await upstream.json();
-  } catch (err) {
+  } catch {
     return errorResponse(
       502,
       "UPSTREAM_PARSE_FAILED",
@@ -167,7 +156,7 @@ export async function onRequest(context) {
     blk: s.blk ?? null,
     turnover: s.turnover ?? null,
     pf: s.pf ?? null,
-    pts: s.pts ?? null
+    pts: s.pts ?? null,
   };
 
   return jsonResponse({
@@ -178,7 +167,7 @@ export async function onRequest(context) {
     meta: {
       source: "balldontlie",
       sport: "nba",
-      endpoint: "stats.season"
-    }
+      endpoint: "stats.season",
+    },
   });
 }
