@@ -18,137 +18,220 @@
         <p class="tagline">NBA Props · Vegas Vibes · Data Driven</p>
       </div>
       <div class="header-meta">
-        <span class="header-pill">Thread 6 · Overview wiring</span>
+        <span class="header-pill">Thread 1 · UI Shell</span>
       </div>
     </header>
 
     <main class="app-main">
       <div class="layout-grid">
         <!-- LEFT: NAV / SECTIONS -->
-        <aside class="sidebar">
-          <div class="sidebar-section sidebar-section-top">
-            <p class="sidebar-label">Sections</p>
-            <nav class="sidebar-nav">
-              <button class="sidebar-link is-active" data-tab="overview">
-                <span class="dot dot-live"></span>
-                Overview
-              </button>
-              <button class="sidebar-link" data-tab="slate">
-                Full Slate
-              </button>
-              <button class="sidebar-link" data-tab="players">
-                Players
-              </button>
-              <button class="sidebar-link" data-tab="tools">
-                Tools
-              </button>
-            </nav>
+        <aside class="sidebar sidebar-left">
+          <div class="sidebar-group">
+            <div class="sidebar-label">Navigation</div>
+            <button class="nav-item nav-item-active" data-view="overview">
+              Overview
+            </button>
+            <button class="nav-item" data-view="games">
+              Today&apos;s Games
+            </button>
+            <button class="nav-item" data-view="players">
+              Players &amp; Props
+            </button>
+            <button class="nav-item" data-view="trends">
+              Trends &amp; Tools
+            </button>
+          </div>
+
+          <div class="sidebar-group">
+            <div class="sidebar-label">Future Modules</div>
+            <div class="sidebar-chip-row">
+              <span class="sidebar-chip">BDL Sync</span>
+              <span class="sidebar-chip">Matchups</span>
+              <span class="sidebar-chip">Alerts</span>
+            </div>
           </div>
         </aside>
 
-        <!-- RIGHT: MAIN CONTENT -->
-        <section class="main-column">
-          <!-- OVERVIEW TAB -->
-          <section
-            class="tab-pane is-active"
-            data-tab-pane="overview"
-          >
-            <div class="overview-grid">
-              <!-- Today’s Games panel -->
-              <section class="panel panel-alt today-games-panel">
-                <header class="panel-header">
-                  <div>
-                    <h2 class="panel-title">Today’s Games</h2>
-                    <p class="panel-subtitle">
-                      Live BDL schedule · auto-refresh via /api/games/today
-                    </p>
-                  </div>
-                  <button
-                    id="refresh-games-today"
-                    class="pill-button pill-button-glow"
-                    type="button"
-                  >
-                    Refresh slate
-                  </button>
-                </header>
+        <!-- CENTER: MAIN PANEL -->
+        <section class="layout-center">
+          <!-- OVERVIEW VIEW -->
+          <section class="view view-active" data-view-panel="overview">
+            <section class="hero-card">
+              <h2>Hello, Vegas.</h2>
+              <p>
+                This is your base PropsParlor shell. Future threads will plug in
+                live NBA data, prop lines, matchup tools, and auto-built slips.
+              </p>
+              <p class="hero-subcopy">
+                For now, this is a static layout: left navigation, central
+                dashboard, and a right-side pick slip area.
+              </p>
+              <div class="placeholder-pill">
+                Thread 1 · UI Foundation Only
+              </div>
+            </section>
 
-                <div
-                  id="games-today"
-                  class="games-list is-loading"
-                >
-                  <div class="games-list-empty">
-                    Loading today’s slate…
-                  </div>
+            <!-- Static system status strip (Thread 1 only) -->
+            <section class="panel panel-status">
+              <div class="panel-header">
+                <span class="panel-title">System Status</span>
+                <span class="panel-tag panel-tag-soft">Thread 1 · Static</span>
+              </div>
+              <div class="status-row">
+                <div class="status-item">
+                  <span class="status-label">Cloudflare Pages</span>
+                  <span class="status-pill status-pill-online">Online</span>
+                  <span class="status-note">Serving UI shell</span>
                 </div>
-              </section>
-
-              <!-- Right-side placeholder panel (keeps layout stable) -->
-              <section class="panel">
-                <header class="panel-header">
-                  <div>
-                    <h2 class="panel-title">PropsParlor Overview</h2>
-                    <p class="panel-subtitle">
-                      This block will become charts / top props later.
-                    </p>
-                  </div>
-                </header>
-                <div class="panel-body">
-                  <p class="muted">
-                    For Thread 6, the goal is just to wire up the “Today’s
-                    Games” list to live BDL data. Once that’s stable, we’ll
-                    turn this card into your green / yellow / red props view.
-                  </p>
+                <div class="status-item">
+                  <span class="status-label">Cloudflare Workers</span>
+                  <span class="status-pill status-pill-pending">Not wired</span>
+                  <span class="status-note">Will be added in a later thread</span>
                 </div>
-              </section>
-            </div>
+                <div class="status-item">
+                  <span class="status-label">BDL (GOAT tier)</span>
+                  <span class="status-pill status-pill-pending">Not wired</span>
+                  <span class="status-note">env.BDL_API_KEY reserved for backend</span>
+                </div>
+              </div>
+            </section>
+
+            <section class="panel panel-future">
+              <div class="panel-header">
+                <span class="panel-title">Dashboard Placeholder</span>
+                <span class="panel-tag">Static · No Data Yet</span>
+              </div>
+              <p class="panel-text">
+                This area will host your core views: overview, game slates,
+                player search, and prop breakdowns. In future work, we&apos;ll
+                wire this to Cloudflare Workers and BDL.
+              </p>
+            </section>
           </section>
 
-          <!-- OTHER TABS (placeholders for now) -->
-          <section class="tab-pane" data-tab-pane="slate">
-            <div class="panel">
-              <header class="panel-header">
-                <h2 class="panel-title">Full Slate</h2>
-              </header>
-              <div class="panel-body">
-                <p class="muted">
-                  Coming in a later thread: full slate breakdown by game and
-                  prop type.
-                </p>
+          <!-- TODAY'S GAMES VIEW -->
+          <section class="view" data-view-panel="games">
+            <section class="panel">
+              <div class="panel-header">
+                <span class="panel-title">Today&apos;s Games</span>
+                <span class="panel-tag panel-tag-soft">Live · BDL Schedule</span>
               </div>
-            </div>
+              <p class="panel-text">
+                Daily NBA slate: matchups, tipoff times, and links to stats.
+              </p>
+
+              <!-- Loading / error / empty states -->
+              <p id="games-today-loading" class="panel-text">
+                Loading today&apos;s games…
+              </p>
+              <p
+                id="games-today-error"
+                class="panel-text"
+                style="display: none;"
+              >
+                Unable to load today&apos;s games. Please refresh to try again.
+              </p>
+              <p
+                id="games-today-empty"
+                class="panel-text"
+                style="display: none;"
+              >
+                No NBA games scheduled for today.
+              </p>
+
+              <!-- Table wrapper -->
+              <div
+                id="games-today-wrapper"
+                class="games-table-wrapper"
+                style="display: none;"
+              >
+                <table class="games-table">
+                  <thead>
+                    <tr>
+                      <th>Matchup</th>
+                      <th>Tipoff</th>
+                      <th>Status</th>
+                      <th style="text-align: right;">Props / Stats</th>
+                    </tr>
+                  </thead>
+                  <tbody id="games-today-body">
+                    <!-- Filled by JS -->
+                  </tbody>
+                </table>
+              </div>
+            </section>
           </section>
 
-          <section class="tab-pane" data-tab-pane="players">
-            <div class="panel">
-              <header class="panel-header">
-                <h2 class="panel-title">Players</h2>
-              </header>
-              <div class="panel-body">
-                <p class="muted">
-                  Coming later: player search + season / last-10 splits.
-                </p>
+          <!-- PLAYERS & PROPS VIEW -->
+          <section class="view" data-view-panel="players">
+            <section class="panel">
+              <div class="panel-header">
+                <span class="panel-title">Players &amp; Props Shell</span>
+                <span class="panel-tag panel-tag-soft">Static · Thread 1</span>
               </div>
-            </div>
+              <p class="panel-text">
+                This view will hold player search, stat summaries, and your
+                green/yellow/red prop suggestions. In this thread it stays
+                static to keep the UI foundation clean and testable.
+              </p>
+              <p class="panel-text">
+                Future work: typeahead search, player cards, and quick-add prop
+                actions that feed into the Pick Slip on the right.
+              </p>
+            </section>
           </section>
 
-          <section class="tab-pane" data-tab-pane="tools">
-            <div class="panel">
-              <header class="panel-header">
-                <h2 class="panel-title">Tools</h2>
-              </header>
-              <div class="panel-body">
-                <p class="muted">
-                  Coming later: parlay builder, odds calculator, export to
-                  sportsbook.
-                </p>
+          <!-- TRENDS & TOOLS VIEW -->
+          <section class="view" data-view-panel="trends">
+            <section class="panel">
+              <div class="panel-header">
+                <span class="panel-title">Trends &amp; Tools Shell</span>
+                <span class="panel-tag panel-tag-soft">Static · Thread 1</span>
               </div>
-            </div>
+              <p class="panel-text">
+                This space is reserved for advanced views: team vs. position
+                stats, pace and efficiency charts, and any custom tools you want
+                to give yourself an edge.
+              </p>
+              <p class="panel-text">
+                Right now, it&apos;s a placeholder panel so that your nav feels
+                real even before data and charts are connected.
+              </p>
+            </section>
           </section>
         </section>
+
+        <!-- RIGHT: PICK SLIP SHELL -->
+        <aside class="sidebar sidebar-right">
+          <div class="panel slip-panel">
+            <div class="panel-header">
+              <span class="panel-title">Pick Slip</span>
+              <span class="panel-tag panel-tag-soft">Coming Soon</span>
+            </div>
+            <p class="panel-text">
+              This will be your slip builder: selected props, odds, and
+              parlay summary before sending to your sportsbook.
+            </p>
+            <ul class="slip-list">
+              <li class="slip-placeholder-row">
+                <span class="slip-placeholder-label">No picks added</span>
+                <span class="slip-placeholder-sub">Future: click a prop to send it here.</span>
+              </li>
+            </ul>
+            <button class="slip-button" disabled>
+              Build Parlay (Disabled · Thread 1)
+            </button>
+          </div>
+        </aside>
       </div>
     </main>
+
+    <footer class="app-footer">
+      <span>PropsParlor · UI Shell Only · Powered by Cloudflare Pages</span>
+    </footer>
   </div>
 
-  <script type="module" src="scripts/main.js"></script>
+  <script src="scripts/main.js"></script>
+  <script src="scripts/games-today-ui.js"></script>
 </body>
 </html>
