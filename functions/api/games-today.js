@@ -1,154 +1,132 @@
 // functions/games-today.js
-//
-// Route:  GET /api/games-today
-//
-// Uses your BDL_API_KEY environment variable to fetch today's NBA games
-// from BallDontLie and returns a cleaned list of games.
 
 export async function onRequest(context) {
   const { env } = context;
 
-  const apiKey = env.BDL_API_KEY;
-  if (!apiKey) {
-    return jsonResponse(
-      {
-        error: "Missing BDL_API_KEY environment variable on Cloudflare Pages.",
-      },
-      500
-    );
+  // 1) Compute today's date in YYYY-MM-DD (Cloudflare runs in UTC)
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10); // e.g. "2025-12-11"
+
+  // 2) Build a cache key specific to "games today"
+  const cacheKey = `games-today:${today}`;
+
+  // 3) Try KV cache first
+  try {
+    const cached = await env.PROPSPARLOR_BDL_CACHE.get(cacheKey);
+
+    if (cached) {
+      // Return cached JSON directly
+      return new Response(cached, {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+        },
+      });
+    }
+  } catch (err) {
+    // If KV fails for any reason, just fall through and hit BDL
+    console.error("KV get error (games-today):", err);
   }
 
+  // 4) Cache miss → call BDL
   try {
-    // Compute today's date in America/New_York, formatted as YYYY-MM-DD
-    const today = new Date();
-    const todayStr = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "America/New_York",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(today); // en-CA gives YYYY-MM-DD
+    const url = new URL("https://api.balldontlie.io/v2/games");
+    url.searchParams.set("dates[]", today);
+    url.searchParams.set("per_page", "100");
 
-    const url = `https://api.balldontlie.io/v1/games?per_page=100&dates[]=${todayStr}`;
-
-    const bdlResponse = await fetch(url, {
+    const response = await fetch(url.toString(), {
+      method: "GET",
       headers: {
-        Authorization: apiKey,
+        Authorization: `Bearer ${env.BDL_API_KEY}`,
       },
     });
 
-    if (!bdlResponse.ok) {
-      const errorText = await safeText(bdlResponse);
-      return jsonResponse(
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "");
+      console.error("BDL games-today error:", response.status, errorText);
+
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: {
+            source: "BDL",
+            status: response.status,
+            message: "Failed to fetch games from BallDontLie.",
+          },
+        }),
         {
-          error: "Error calling BallDontLie games endpoint.",
-          status: bdlResponse.status,
-          body: errorText,
-        },
-        bdlResponse.status
+          status: 500,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
+        }
       );
     }
 
-    const bdlJson = await safeJson(bdlResponse);
+    const json = await response.json();
 
-    const gamesRaw = Array.isArray(bdlJson?.data) ? bdlJson.data : [];
+    // 5) Clean the response into the format your frontend expects
+    const cleanedGames = (json.data || []).map((g) => ({
+      id: g.id,
+      date: g.date,
+      season: g.season,
+      status: g.status,
+      period: g.period,
+      time: g.time,
+      postseason: g.postseason,
+      home_team: g.home_team,
+      visitor_team: g.visitor_team,
+      home_team_score: g.home_team_score,
+      visitor_team_score: g.visitor_team_score,
+    }));
 
-    // Clean the data for frontend use
-    const games = gamesRaw.map((g) => {
-      const home = g.home_team || {};
-      const visitor = g.visitor_team || {};
-
-      // Convert the UTC datetime from BDL into an Eastern tipoff time string
-      let tipoff_est = null;
-      if (g.datetime) {
-        try {
-          const dt = new Date(g.datetime);
-          tipoff_est = new Intl.DateTimeFormat("en-US", {
-            timeZone: "America/New_York",
-            hour: "numeric",
-            minute: "2-digit",
-            hour12: true,
-          }).format(dt);
-        } catch (e) {
-          // Fallback to status if datetime parsing fails
-          tipoff_est = g.status || null;
-        }
-      } else if (g.status) {
-        // Pre-game status like "7:00 pm ET"
-        tipoff_est = g.status;
-      }
-
-      return {
-        id: g.id,
-        season: g.season,
-        date: g.date,
-        datetime_utc: g.datetime || null,
-        status: g.status,
-        tipoff_est,
-        postseason: g.postseason,
-        home_team: {
-          id: home.id,
-          abbreviation: home.abbreviation,
-          full_name: home.full_name,
-          city: home.city,
-          conference: home.conference,
-          division: home.division,
-        },
-        visitor_team: {
-          id: visitor.id,
-          abbreviation: visitor.abbreviation,
-          full_name: visitor.full_name,
-          city: visitor.city,
-          conference: visitor.conference,
-          division: visitor.division,
-        },
-      };
-    });
-
-    const result = {
-      date: todayStr,
-      count: games.length,
-      games,
-    };
-
-    return jsonResponse(result, 200);
-  } catch (err) {
-    return jsonResponse(
+    const payload = JSON.stringify(
       {
-        error: "Unexpected error in /api/games-today.",
-        details: String(err),
+        ok: true,
+        date: today,
+        games: cleanedGames,
       },
-      500
+      null,
+      2
     );
-  }
-}
 
-// Helper to return JSON with CORS so the frontend can call this from the browser.
-function jsonResponse(body, status = 200) {
-  return new Response(JSON.stringify(body, null, 2), {
-    status,
-    headers: {
-      "Content-Type": "application/json; charset=utf-8",
-      "Access-Control-Allow-Origin": "*",
-    },
-  });
-}
+    // 6) Save to KV with TTL (e.g., 10 minutes = 600 seconds)
+    try {
+      await env.PROPSPARLOR_BDL_CACHE.put(cacheKey, payload, {
+        expirationTtl: 600, // 10 minutes
+      });
+    } catch (err) {
+      console.error("KV put error (games-today):", err);
+      // If KV write fails, we still return the fresh payload
+    }
 
-// Safely read response text (in case BDL returns non-JSON error body)
-async function safeText(response) {
-  try {
-    return await response.text();
-  } catch {
-    return null;
-  }
-}
-
-// Safely parse JSON, with fallback for invalid JSON bodies.
-async function safeJson(response) {
-  const text = await safeText(response);
-  if (!text) return {};
-  try {
-    return JSON.parse(text);
-  } catch {
-    return {};
+    // 7) Return the fresh payload
+    return new Response(payload, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+      },
+    });
+  } catch (err) {
+    console.error("Unexpected error in games-today:", err);
+    return new Response(
+      JSON.stringify({
+        ok: false,
+        error: {
+          source: "worker",
+          message: "Unexpected error in games-today.",
+        },
+      }),
+      {
+        status: 500,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+        },
+      }
+    );
   }
 }
