@@ -1,6 +1,7 @@
 // scripts/players-ui.js
 // Thread 7 – Players view: game context + matchup-aware demo player list +
-// tabbed Season / Last 10 / Last 5 stats card + mini chart + Add to Slip.
+// tabbed Season / Last 10 / Last 5 stats card + mini chart + Add to Slip +
+// selectable primary stat (PTS / REB / AST / PRA / 3PM).
 
 (function () {
   const SEASON_API_URL = "/api/stats/season";
@@ -19,7 +20,8 @@
 
   // State and cache
   let currentPlayer = null;
-  let currentTab = "season"; // "season" | "last10" | "last5"
+  let currentTab = "season";        // "season" | "last10" | "last5"
+  let primaryStatKey = "pra";       // "pts" | "reb" | "ast" | "pra" | "fg3m"
   const statsCache = Object.create(null); // key: `${playerId}:${tab}`
 
   // ---------------------------------------------------------------------------
@@ -58,6 +60,7 @@
     }
 
     ensureTabsInitialized();
+    wireStatRows();
     updateChart(null);
   }
 
@@ -176,6 +179,42 @@
     const ast = toNum(stats.ast ?? stats.assists);
     if (pts === null || reb === null || ast === null) return null;
     return pts + reb + ast;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Stat row selection
+  // ---------------------------------------------------------------------------
+
+  function wireStatRows() {
+    const rows = document.querySelectorAll(".player-stat-row");
+    rows.forEach((row) => {
+      row.addEventListener("click", () => {
+        const valEl = row.querySelector(".player-stat-value");
+        const key = valEl ? valEl.dataset.statKey : null;
+        if (!key) return;
+        setPrimaryStat(key);
+      });
+    });
+    // default primary stat
+    setPrimaryStat(primaryStatKey);
+  }
+
+  function setPrimaryStat(key) {
+    if (!key) return;
+    primaryStatKey = key;
+
+    const rows = document.querySelectorAll(".player-stat-row");
+    rows.forEach((row) => {
+      const valEl = row.querySelector(".player-stat-value");
+      const rowKey = valEl ? valEl.dataset.statKey : null;
+      if (rowKey === primaryStatKey) {
+        row.classList.add("player-stat-row-active");
+      } else {
+        row.classList.remove("player-stat-row-active");
+      }
+    });
+
+    syncAddSlipButtonDisabled();
   }
 
   // ---------------------------------------------------------------------------
@@ -497,6 +536,7 @@
         }
 
         ensureTabsInitialized();
+        wireStatRows();
         updateTabActiveClasses();
         renderTabStats(currentTab);
       });
@@ -513,6 +553,22 @@
     if (currentTab === "last10") return "L10";
     if (currentTab === "last5") return "L5";
     return "SEASON";
+  }
+
+  function statLabelFromKey(key) {
+    switch (key) {
+      case "pts":
+        return "PTS";
+      case "reb":
+        return "REB";
+      case "ast":
+        return "AST";
+      case "fg3m":
+        return "3PM";
+      case "pra":
+      default:
+        return "PRA";
+    }
   }
 
   function readStatsFromDom() {
@@ -537,22 +593,24 @@
       return;
     }
 
-    // If we have at least one numeric stat, enable
     const stats = readStatsFromDom();
-    const hasNumeric =
+    const hasAnyNumeric =
       stats.pts !== null ||
       stats.reb !== null ||
       stats.ast !== null ||
       stats.pra !== null ||
       stats.fg3m !== null;
 
-    if (hasNumeric) {
-      btn.disabled = false;
-      btn.textContent = "Add to Slip";
-    } else {
+    if (!hasAnyNumeric) {
       btn.disabled = true;
       btn.textContent = "Add to Slip (Disabled · No Stats)";
+      return;
     }
+
+    // If primary stat has no value, still allow adding – it will just
+    // fall back to the first numeric in handleAddToSlipClick.
+    btn.disabled = false;
+    btn.textContent = "Add to Slip";
   }
 
   function handleAddToSlipClick() {
@@ -572,15 +630,34 @@
     }
 
     const tabLabel = currentTabLabelShort();
-    const priValue =
-      stats.pra ??
-      stats.pts ??
-      stats.reb ??
-      stats.ast ??
-      stats.fg3m ??
-      null;
 
-    const title = `${currentPlayer.name} · ${tabLabel} PRA`;
+    // Use selected primary stat first, fall back to others if missing
+    const statKeysInOrder = [
+      primaryStatKey,
+      "pra",
+      "pts",
+      "reb",
+      "ast",
+      "fg3m",
+    ].filter((v, idx, arr) => v && arr.indexOf(v) === idx);
+
+    let chosenKey = null;
+    let chosenValue = null;
+    for (const key of statKeysInOrder) {
+      if (stats[key] !== null && stats[key] !== undefined) {
+        chosenKey = key;
+        chosenValue = stats[key];
+        break;
+      }
+    }
+
+    if (!chosenKey) {
+      // Nothing numeric – do nothing (should not happen if button was enabled)
+      return;
+    }
+
+    const label = statLabelFromKey(chosenKey);
+    const title = `${currentPlayer.name} · ${tabLabel} ${label}`;
     const tagText = `${currentPlayer.team} · ${tabLabel}`;
 
     const li = document.createElement("li");
@@ -592,7 +669,7 @@
     const titleEl = document.createElement("span");
     titleEl.className = "slip-row-title";
     titleEl.textContent =
-      priValue !== null ? `${title} ${priValue.toFixed(1)}` : title;
+      chosenValue !== null ? `${title} ${chosenValue.toFixed(1)}` : title;
 
     const tagEl = document.createElement("span");
     tagEl.className = "slip-row-tag";
@@ -608,6 +685,7 @@
         stats.pts !== null ? `PTS ${stats.pts.toFixed(1)}` : null,
         stats.reb !== null ? `REB ${stats.reb.toFixed(1)}` : null,
         stats.ast !== null ? `AST ${stats.ast.toFixed(1)}` : null,
+        stats.pra !== null ? `PRA ${stats.pra.toFixed(1)}` : null,
         stats.fg3m !== null ? `3PM ${stats.fg3m.toFixed(1)}` : null,
       ]
         .filter(Boolean)
@@ -644,9 +722,12 @@
     applySubtitle(currentTab, currentPlayer, false);
     setStatValuesFromObject({});
     updateChart(null);
+    primaryStatKey = "pra";
+    setPrimaryStat(primaryStatKey);
     syncAddSlipButtonDisabled();
 
     ensureTabsInitialized();
+    wireStatRows();
     updateTabActiveClasses();
     renderDemoPlayers(gameLabel);
   }
