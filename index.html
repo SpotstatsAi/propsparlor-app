@@ -178,7 +178,7 @@
               </p>
               <p class="panel-text">
                 Flow (v1): click a game in Today&apos;s Games &rarr; jump here with that matchup
-                pre-selected &rarr; click a player to see their core season stats.
+                pre-selected &rarr; click a player to see their core stats by Season / L10 / L5.
               </p>
             </section>
 
@@ -220,6 +220,9 @@
                   Select a player from the list above. We&apos;ll show their stats here
                   for Season, Last 10, and Last 5 once the backend is wired.
                 </p>
+
+                <!-- Tabs are injected here by JS just above the stats grid -->
+
                 <div class="player-stats-grid">
                   <div class="player-stat-row">
                     <span class="player-stat-label">PTS</span>
@@ -245,11 +248,18 @@
 
                 <!-- Mini chart container (tabs feed into this) -->
                 <div class="player-chart" id="player-chart">
-                  <div class="player-chart-header">Mini Chart (PTS / REB / AST / PRA / 3PM)</div>
+                  <div class="player-chart-header">
+                    Mini Chart (PTS / REB / AST / PRA / 3PM)
+                  </div>
                   <div class="player-chart-body" id="player-chart-body">
                     <!-- Filled by JS -->
                   </div>
                 </div>
+
+                <!-- Add to Pick Slip CTA -->
+                <button id="player-add-slip" class="player-add-slip" disabled>
+                  Add to Slip (Disabled · No Player)
+                </button>
               </div>
             </section>
           </section>
@@ -288,7 +298,9 @@
             <ul class="slip-list">
               <li class="slip-placeholder-row">
                 <span class="slip-placeholder-label">No picks added</span>
-                <span class="slip-placeholder-sub">Future: click a prop to send it here.</span>
+                <span class="slip-placeholder-sub">
+                  Future: click a prop to send it here.
+                </span>
               </li>
             </ul>
             <button class="slip-button" disabled>
