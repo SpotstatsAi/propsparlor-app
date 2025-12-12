@@ -4,8 +4,7 @@
 // selectable primary stat (PTS / REB / AST / PRA / 3PM).
 //
 // Chart upgrade: pulls /api/stats/gamelog and renders SVG sparklines + a main line chart.
-// Outlier-style upgrade (v1): prop-line overlay + over/under toggle + hit-rate shading + hit-rate %.
-// Opponent context: placeholder line (we’ll wire real opponent/pace later).
+// Scroll upgrade: scroll sync between spark row + main chart.
 
 (function () {
   const SEASON_API_URL = "/api/stats/season";
@@ -24,12 +23,8 @@
   let currentPlayer = null;
   let currentTab = "season";  // "season" | "last10" | "last5"
   let primaryStatKey = "pra"; // "pts" | "reb" | "ast" | "pra" | "fg3m"
-  const statsCache = Object.create(null);   // key: `${playerId}:${tab}`
+  const statsCache = Object.create(null); // key: `${playerId}:${tab}`
   const gamelogCache = Object.create(null); // key: `${playerId}` -> array
-
-  // Prop-line controls (v1)
-  let propMode = "over"; // "over" | "under"
-  let propLine = null;   // number | null
 
   function initPlayerViewPlaceholders() {
     const addSlipBtn = document.getElementById("player-add-slip");
@@ -47,7 +42,11 @@
     wireStatRows();
     updateStatMeters(null);
 
+    // Ensure chart containers are in a known state
     renderChartPlaceholders();
+
+    // Bind scroll sync once (sparks <-> main chart)
+    bindChartScrollSync();
   }
 
   function switchToPlayersView() {
@@ -92,6 +91,7 @@
       btn.textContent = tabCfg.label;
 
       if (idx === 0) btn.classList.add("player-pill-active");
+
       btn.addEventListener("click", () => onTabClick(tabCfg.id));
       tabs.appendChild(btn);
     });
@@ -145,6 +145,7 @@
     updateStatMeters(statsObj || null);
   }
 
+  // Set meter fill % for each stat row based on max stat in current view
   function updateStatMeters(statsObj) {
     const rows = document.querySelectorAll(".player-stat-row");
     if (!rows.length) return;
@@ -170,6 +171,7 @@
         return;
       }
 
+      // keep a minimum visible fill so it doesn’t look “dead”
       const pct = Math.max(6, Math.min(100, (v / maxVal) * 100));
       row.style.setProperty("--fill", `${pct}%`);
     });
@@ -202,8 +204,8 @@
 
     syncAddSlipButtonDisabled();
 
+    // Re-render main chart for the newly selected stat (if we have a player)
     if (currentPlayer && currentPlayer.bdlId) {
-      propLine = null;
       renderChartsForCurrentPlayer().catch(() => {});
     }
   }
@@ -323,6 +325,7 @@
       applySubtitle(tab, currentPlayer, false);
       syncAddSlipButtonDisabled();
 
+      // Update charts after stats load (charts come from gamelog)
       await renderChartsForCurrentPlayer();
     } catch (err) {
       console.error("Failed to load stats", tab, err);
@@ -337,8 +340,6 @@
     currentTab = tabId;
     updateTabActiveClasses();
     if (!currentPlayer) return;
-
-    propLine = null;
     renderTabStats(currentTab);
   }
 
@@ -399,9 +400,6 @@
 
         const titleEl = document.getElementById("player-card-title");
         if (titleEl) titleEl.textContent = player.name;
-
-        propLine = null;
-        propMode = "over";
 
         ensureTabsInitialized();
         wireStatRows();
@@ -546,8 +544,6 @@
     if (gameCtx) gameCtx.textContent = gameLabel || "Game selected.";
 
     currentPlayer = null;
-    propLine = null;
-    propMode = "over";
 
     const titleEl = document.getElementById("player-card-title");
     if (titleEl) titleEl.textContent = "No player selected";
@@ -576,10 +572,59 @@
     return { sparklines, main };
   }
 
+  // --- Scroll sync (sparks <-> main chart) ---
+  function bindChartScrollSync() {
+    const sparks = document.getElementById("player-sparklines");
+    const main = document.getElementById("player-main-chart");
+    if (!sparks || !main) return;
+
+    if (sparks.dataset.syncBound === "true") return;
+    sparks.dataset.syncBound = "true";
+
+    let locking = false;
+
+    function maxScroll(el) {
+      return Math.max(0, (el.scrollWidth || 0) - (el.clientWidth || 0));
+    }
+
+    function sync(from, to) {
+      const fromMax = maxScroll(from);
+      const toMax = maxScroll(to);
+      if (fromMax <= 0 || toMax <= 0) return;
+
+      const pct = from.scrollLeft / fromMax;
+      to.scrollLeft = pct * toMax;
+    }
+
+    sparks.addEventListener(
+      "scroll",
+      () => {
+        if (locking) return;
+        locking = true;
+        sync(sparks, main);
+        locking = false;
+      },
+      { passive: true }
+    );
+
+    main.addEventListener(
+      "scroll",
+      () => {
+        if (locking) return;
+        locking = true;
+        sync(main, sparks);
+        locking = false;
+      },
+      { passive: true }
+    );
+  }
+
   function renderChartPlaceholders() {
     const { sparklines, main } = getChartsEls();
 
     if (sparklines) {
+      // Keep existing placeholder boxes in index.html if present.
+      // If empty, show a minimal message.
       if (!sparklines.children || sparklines.children.length === 0) {
         sparklines.innerHTML =
           `<div class="panel-text" style="opacity:.75;">Charts placeholder</div>`;
@@ -587,6 +632,8 @@
     }
 
     if (main) {
+      // If the index.html placeholder is still there, leave it.
+      // If empty, provide a minimal placeholder.
       if (!main.innerHTML || !main.innerHTML.trim()) {
         main.innerHTML =
           `<div class="panel-text" style="opacity:.75;">Select a player to render charts.</div>`;
@@ -614,7 +661,9 @@
   }
 
   function seriesForKey(rows, key) {
-    const ordered = rows.slice().reverse(); // oldest -> newest
+    // Rows are DESC by date from API; chart should go left->right oldest->newest
+    const ordered = rows.slice().reverse();
+
     return ordered
       .map((r) => {
         const pts = toNum(r?.pts);
@@ -662,7 +711,9 @@
 
     const d = pts
       .map((p, i) =>
-        i === 0 ? `M ${p[0].toFixed(2)} ${p[1].toFixed(2)}` : `L ${p[0].toFixed(2)} ${p[1].toFixed(2)}`
+        i === 0
+          ? `M ${p[0].toFixed(2)} ${p[1].toFixed(2)}`
+          : `L ${p[0].toFixed(2)} ${p[1].toFixed(2)}`
       )
       .join(" ");
 
@@ -673,51 +724,16 @@
     `;
   }
 
-  function rollingAverage(values, window) {
-    if (!values || values.length === 0) return [];
-    const w = Math.max(1, window | 0);
-    const out = [];
-    for (let i = 0; i < values.length; i++) {
-      const start = Math.max(0, i - (w - 1));
-      const slice = values.slice(start, i + 1);
-      const avg = slice.reduce((a, b) => a + b, 0) / slice.length;
-      out.push(avg);
-    }
-    return out;
-  }
-
-  function hitRate(values, line, mode) {
-    if (!values || values.length === 0) return null;
-    if (line === null || line === undefined || !Number.isFinite(line)) return null;
-
-    let hits = 0;
-    for (const v of values) {
-      if (!Number.isFinite(v)) continue;
-      if (mode === "under") {
-        if (v <= line) hits++;
-      } else {
-        if (v >= line) hits++;
-      }
-    }
-    return Math.round((hits / values.length) * 100);
-  }
-
   function buildMainChartSVG(values, opts) {
     const width = opts?.width || 640;
     const height = opts?.height || 210;
-    const line = opts?.propLine ?? null;
-    const mode = opts?.propMode ?? "over";
 
     if (!values || values.length < 2) {
       return `<div class="panel-text" style="opacity:.8;">Not enough game-log points to chart.</div>`;
     }
 
-    const minV = Math.min(...values);
-    const maxV = Math.max(...values);
-
-    const min = (line !== null && Number.isFinite(line)) ? Math.min(minV, line) : minV;
-    const max = (line !== null && Number.isFinite(line)) ? Math.max(maxV, line) : maxV;
-
+    const min = Math.min(...values);
+    const max = Math.max(...values);
     const span = Math.max(1e-6, max - min);
 
     const padL = 34;
@@ -736,10 +752,13 @@
 
     const d = pts
       .map((p, i) =>
-        i === 0 ? `M ${p[0].toFixed(2)} ${p[1].toFixed(2)}` : `L ${p[0].toFixed(2)} ${p[1].toFixed(2)}`
+        i === 0
+          ? `M ${p[0].toFixed(2)} ${p[1].toFixed(2)}`
+          : `L ${p[0].toFixed(2)} ${p[1].toFixed(2)}`
       )
       .join(" ");
 
+    // Simple rolling average (5-game) overlay
     const roll = rollingAverage(values, Math.min(5, values.length));
     const rollPts = roll.map((v, i) => {
       const x = padL + (i / (roll.length - 1)) * innerW;
@@ -748,15 +767,20 @@
     });
     const rd = rollPts
       .map((p, i) =>
-        i === 0 ? `M ${p[0].toFixed(2)} ${p[1].toFixed(2)}` : `L ${p[0].toFixed(2)} ${p[1].toFixed(2)}`
+        i === 0
+          ? `M ${p[0].toFixed(2)} ${p[1].toFixed(2)}`
+          : `L ${p[0].toFixed(2)} ${p[1].toFixed(2)}`
       )
       .join(" ");
 
+    // Grid lines (horizontal)
     const gridLines = 4;
     const grid = Array.from({ length: gridLines + 1 })
       .map((_, i) => {
         const y = padT + (i / gridLines) * innerH;
-        return `<line x1="${padL}" y1="${y.toFixed(2)}" x2="${(padL + innerW).toFixed(2)}" y2="${y.toFixed(2)}" stroke="rgba(255,255,255,0.06)" stroke-width="1" />`;
+        return `<line x1="${padL}" y1="${y.toFixed(2)}" x2="${(padL + innerW).toFixed(
+          2
+        )}" y2="${y.toFixed(2)}" stroke="rgba(255,255,255,0.06)" stroke-width="1" />`;
       })
       .join("");
 
@@ -764,51 +788,16 @@
     const minLabel = min.toFixed(0);
 
     const dots = pts
-      .map((p) => `<circle cx="${p[0].toFixed(2)}" cy="${p[1].toFixed(2)}" r="2.8" fill="rgba(0,255,180,0.85)" />`)
+      .map((p) => {
+        return `<circle cx="${p[0].toFixed(2)}" cy="${p[1].toFixed(
+          2
+        )}" r="2.8" fill="rgba(0,255,180,0.85)" />`;
+      })
       .join("");
-
-    let propOverlay = "";
-    if (line !== null && Number.isFinite(line)) {
-      const yLine = padT + (1 - (line - min) / span) * innerH;
-
-      const hitY = mode === "over" ? padT : yLine;
-      const hitH = mode === "over" ? (yLine - padT) : (padT + innerH - yLine);
-      const safeHitH = Math.max(0, hitH);
-
-      propOverlay = `
-        <rect
-          x="${padL}"
-          y="${Math.min(hitY, padT + innerH).toFixed(2)}"
-          width="${innerW.toFixed(2)}"
-          height="${safeHitH.toFixed(2)}"
-          fill="${mode === "over" ? "rgba(0,255,180,0.06)" : "rgba(0,120,255,0.06)"}"
-        />
-        <line
-          x1="${padL}"
-          y1="${yLine.toFixed(2)}"
-          x2="${(padL + innerW).toFixed(2)}"
-          y2="${yLine.toFixed(2)}"
-          stroke="rgba(255,215,0,0.85)"
-          stroke-width="1.6"
-          stroke-dasharray="6 5"
-        />
-        <text
-          x="${(padL + innerW - 2).toFixed(2)}"
-          y="${(yLine - 6).toFixed(2)}"
-          text-anchor="end"
-          fill="rgba(255,215,0,0.85)"
-          font-size="10"
-        >
-          Line ${line.toFixed(1)}
-        </text>
-      `;
-    }
 
     return `
       <svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" aria-label="trend chart">
         ${grid}
-        ${propOverlay}
-
         <text x="8" y="${(padT + 10).toFixed(2)}" fill="rgba(255,255,255,0.70)" font-size="10">${maxLabel}</text>
         <text x="8" y="${(padT + innerH).toFixed(2)}" fill="rgba(255,255,255,0.55)" font-size="10">${minLabel}</text>
 
@@ -822,143 +811,34 @@
     `;
   }
 
+  function rollingAverage(values, window) {
+    if (!values || values.length === 0) return [];
+    const w = Math.max(1, window | 0);
+    const out = [];
+    for (let i = 0; i < values.length; i++) {
+      const start = Math.max(0, i - (w - 1));
+      const slice = values.slice(start, i + 1);
+      const avg = slice.reduce((a, b) => a + b, 0) / slice.length;
+      out.push(avg);
+    }
+    return out;
+  }
+
   function sparkTargets() {
+    // Our index.html uses 5 “status-item” cards as placeholders inside #player-sparklines.
+    // Each card has a label + a second div meant to be filled. We’ll fill that second div.
     const root = document.getElementById("player-sparklines");
     if (!root) return null;
+
     const cards = Array.from(root.children || []);
     if (!cards.length) return null;
 
     return cards.map((card) => {
       const blocks = card.querySelectorAll("div");
+      // The last div in each card is the “spark container”
       const sparkHost = blocks && blocks.length ? blocks[blocks.length - 1] : null;
       return sparkHost;
     });
-  }
-
-  function defaultLineFor(values) {
-    if (!values || !values.length) return null;
-    const avg = values.reduce((a, b) => a + b, 0) / values.length;
-    return Math.round(avg * 2) / 2;
-  }
-
-  function renderPropControls(container, statLabel, tabLabel, values) {
-    const currentDefault = defaultLineFor(values);
-    if (propLine === null && currentDefault !== null) propLine = currentDefault;
-
-    const hit = (propLine !== null) ? hitRate(values, propLine, propMode) : null;
-
-    container.innerHTML = `
-      <div style="width:100%; box-sizing:border-box;">
-        <div style="
-          display:grid;
-          grid-template-columns: 1fr auto;
-          align-items:center;
-          gap:10px;
-          margin-bottom:10px;
-        ">
-          <div style="font-size:.82rem; letter-spacing:.12em; text-transform:uppercase; opacity:.88; min-width:0;">
-            ${statLabel} · ${tabLabel} Trend
-          </div>
-
-          <div style="
-            display:flex;
-            align-items:center;
-            justify-content:flex-end;
-            gap:8px;
-            flex-wrap:wrap;
-            max-width: 100%;
-          ">
-            <button type="button" id="pp-mode-over"
-              style="
-                height:28px;
-                padding:0 10px;
-                border-radius:999px;
-                border:1px solid rgba(0,255,180,0.35);
-                background:${propMode === "over" ? "rgba(0,255,180,0.14)" : "rgba(10,10,24,0.65)"};
-                color:#f7f7ff;
-                font-size:11px;
-                letter-spacing:.08em;
-                text-transform:uppercase;
-                cursor:pointer;
-                white-space:nowrap;
-              ">
-              Over
-            </button>
-
-            <button type="button" id="pp-mode-under"
-              style="
-                height:28px;
-                padding:0 10px;
-                border-radius:999px;
-                border:1px solid rgba(0,120,255,0.35);
-                background:${propMode === "under" ? "rgba(0,120,255,0.14)" : "rgba(10,10,24,0.65)"};
-                color:#f7f7ff;
-                font-size:11px;
-                letter-spacing:.08em;
-                text-transform:uppercase;
-                cursor:pointer;
-                white-space:nowrap;
-              ">
-              Under
-            </button>
-
-            <div style="display:flex; align-items:center; gap:6px; height:28px;">
-              <span style="font-size:11px; opacity:.75; letter-spacing:.08em; text-transform:uppercase; white-space:nowrap;">Line</span>
-              <input id="pp-line-input" type="number" step="0.5" value="${propLine !== null ? propLine : ""}"
-                style="
-                  height:28px;
-                  width:78px;
-                  padding:0 10px;
-                  border-radius:12px;
-                  border:1px solid rgba(255,215,0,0.35);
-                  background:rgba(0,0,0,0.25);
-                  color:#f7f7ff;
-                  outline:none;
-                  box-sizing:border-box;
-                " />
-            </div>
-
-            <div style="font-size:11px; opacity:.78; white-space:nowrap; height:28px; display:flex; align-items:center;">
-              Hit rate: <span style="opacity:1; margin-left:4px;">${hit !== null ? hit + "%" : "—"}</span>
-            </div>
-          </div>
-        </div>
-
-        <div style="font-size:.72rem; opacity:.72; line-height:1.35; margin-bottom:10px;">
-          Opponent context (placeholder): pace / matchup / role will render here.
-        </div>
-
-        <div id="pp-chart-svg"></div>
-
-        <div style="margin-top:10px; font-size:.72rem; opacity:.72; line-height:1.35;">
-          Next upgrade: opponent-specific splits + minutes/usage context + bet-ready line suggestions.
-        </div>
-      </div>
-    `;
-
-    const overBtn = container.querySelector("#pp-mode-over");
-    const underBtn = container.querySelector("#pp-mode-under");
-    const lineInput = container.querySelector("#pp-line-input");
-
-    if (overBtn) {
-      overBtn.addEventListener("click", () => {
-        propMode = "over";
-        renderChartsForCurrentPlayer().catch(() => {});
-      });
-    }
-    if (underBtn) {
-      underBtn.addEventListener("click", () => {
-        propMode = "under";
-        renderChartsForCurrentPlayer().catch(() => {});
-      });
-    }
-    if (lineInput) {
-      lineInput.addEventListener("input", () => {
-        const v = parseFloat(lineInput.value);
-        propLine = Number.isFinite(v) ? v : null;
-        renderChartsForCurrentPlayer().catch(() => {});
-      });
-    }
   }
 
   async function renderChartsForCurrentPlayer() {
@@ -968,16 +848,17 @@
       return;
     }
 
-    const limit = 50;
+    const limit = 50; // fetch enough once; then slice by tab for display
     const rows = await fetchGamelog(currentPlayer.bdlId, limit);
     if (!rows || rows.length < 2) {
-      main.innerHTML = `<div class="panel-text" style="opacity:.8;">No game log available yet.</div>`;
+      if (main) main.innerHTML = `<div class="panel-text" style="opacity:.8;">No game log available yet.</div>`;
       return;
     }
 
     const windowN = windowSizeForTab(currentTab);
-    const sliced = rows.slice(0, Math.max(windowN, 5));
+    const sliced = rows.slice(0, Math.max(windowN, 5)); // rows are DESC; slice recent N
 
+    // Sparklines: PTS/REB/AST/PRA/3PM always use last 10 (or available)
     const sparkRows = rows.slice(0, 12);
     const sparkKeys = ["pts", "reb", "ast", "pra", "fg3m"];
     const sparkHosts = sparkTargets();
@@ -989,30 +870,41 @@
       });
     }
 
+    // Main chart uses the primary stat + the selected tab window
     const mainVals = seriesForKey(sliced, primaryStatKey);
     const statLabel = statLabelFromKey(primaryStatKey);
     const tabLabel = currentTabLabelShort();
 
+    // Width logic: make SVG wide enough to scroll (so scroll-sync has meaning)
     const rect = main.getBoundingClientRect ? main.getBoundingClientRect() : null;
-    const w = rect && rect.width ? Math.max(520, Math.floor(rect.width)) : 640;
+    const baseW = rect && rect.width ? Math.max(520, Math.floor(rect.width)) : 640;
+    const pointsW = 28 * Math.max(10, mainVals.length); // ~28px per game point
+    const w = Math.max(baseW, pointsW);
 
-    renderPropControls(main, statLabel, tabLabel, mainVals);
+    main.innerHTML = `
+      <div style="min-width:${w}px; width:${w}px;">
+        <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:8px;">
+          <div style="font-size:.82rem; letter-spacing:.12em; text-transform:uppercase; opacity:.88;">
+            ${statLabel} · ${tabLabel} Trend
+          </div>
+          <div style="font-size:.72rem; opacity:.72; white-space:nowrap;">
+            Rolling avg overlay (v1)
+          </div>
+        </div>
+        ${buildMainChartSVG(mainVals, { width: w, height: 210 })}
+        <div style="margin-top:8px; font-size:.72rem; opacity:.72; line-height:1.35;">
+          Next upgrade: prop-line overlay + hit-rate shading + opponent context.
+        </div>
+      </div>
+    `;
 
-    const svgHost = main.querySelector("#pp-chart-svg");
-    if (!svgHost) return;
-
-    svgHost.innerHTML = buildMainChartSVG(mainVals, {
-      width: w,
-      height: 210,
-      propLine,
-      propMode,
-    });
+    // Ensure scroll sync is bound (safe/no-op if already bound)
+    bindChartScrollSync();
   }
 
   // ---------------------------
-  // Boot + API entry
+  // Boot
   // ---------------------------
-
   document.addEventListener("DOMContentLoaded", initPlayerViewPlaceholders);
 
   window.PropsParlor = window.PropsParlor || {};
