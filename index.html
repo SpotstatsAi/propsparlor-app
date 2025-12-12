@@ -208,17 +208,17 @@
               </div>
             </section>
 
-            <!-- Player stats shell (wired to /api/stats/season in later steps) -->
+            <!-- Player stats shell -->
             <section class="panel">
               <div class="panel-header">
                 <span class="panel-title">Player Stats Card</span>
-                <span class="panel-tag panel-tag-soft">Season Averages</span>
+                <span class="panel-tag panel-tag-soft">Season / L10 / L5</span>
               </div>
               <div class="player-card-shell">
                 <h3 id="player-card-title">No player selected</h3>
                 <p id="player-card-subtitle" class="panel-text">
-                  Select a player from the list above. We&apos;ll show their core season
-                  averages here once the backend is wired to /api/stats/season.
+                  Select a player from the list above. We&apos;ll show their stats here
+                  for Season, Last 10, and Last 5 once the backend is wired.
                 </p>
                 <div class="player-stats-grid">
                   <div class="player-stat-row">
@@ -240,6 +240,14 @@
                   <div class="player-stat-row">
                     <span class="player-stat-label">3PM</span>
                     <span class="player-stat-value" data-stat-key="fg3m">—</span>
+                  </div>
+                </div>
+
+                <!-- Mini chart container (tabs feed into this) -->
+                <div class="player-chart" id="player-chart">
+                  <div class="player-chart-header">Mini Chart (PTS / REB / AST / PRA / 3PM)</div>
+                  <div class="player-chart-body" id="player-chart-body">
+                    <!-- Filled by JS -->
                   </div>
                 </div>
               </div>
