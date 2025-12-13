@@ -8,6 +8,7 @@
 // - Editable OVER / UNDER
 // - Editable LINE
 // - Duplicate-pick feedback: scroll + pulse highlight (no duplicate rows)
+// - Thread 8C: Parlay Summary card (placeholder odds + stake + est payout)
 
 (function () {
   const DEFAULT_SIDE = "OVER";
@@ -57,6 +58,11 @@
     return Number.isFinite(n) ? n : null;
   }
 
+  function clamp(n, min, max) {
+    if (!Number.isFinite(n)) return n;
+    return Math.max(min, Math.min(max, n));
+  }
+
   function flashPickRow(pickId) {
     const listEl = getListEl();
     if (!listEl) return;
@@ -64,10 +70,8 @@
     const row = listEl.querySelector(`[data-pick-id="${pickId}"]`);
     if (!row) return;
 
-    // Scroll it into view in the slip panel
     row.scrollIntoView({ behavior: "smooth", block: "nearest" });
 
-    // Pulse highlight without requiring CSS changes
     try {
       row.animate(
         [
@@ -77,12 +81,226 @@
         ],
         { duration: 650, easing: "ease-out" }
       );
-    } catch (_) {
-      // no-op (older browsers)
+    } catch (_) {}
+  }
+
+  // ---------------------------
+  // Thread 8C — Parlay Summary (placeholder odds)
+  // ---------------------------
+
+  const summaryState = {
+    stake: 10,
+    perLegAmerican: -110,
+  };
+
+  function americanToDecimal(american) {
+    const a = safeNumber(american);
+    if (a === null || a === 0) return null;
+    if (a > 0) return 1 + a / 100;
+    return 1 + 100 / Math.abs(a);
+  }
+
+  function fmtMoney(n) {
+    if (!Number.isFinite(n)) return "—";
+    return `$${n.toFixed(2)}`;
+  }
+
+  function ensureSummaryCard(listEl) {
+    if (!listEl) return null;
+
+    const parent = listEl.parentElement;
+    if (!parent) return null;
+
+    let card = parent.querySelector("#pp-slip-summary");
+    if (card) return card;
+
+    card = document.createElement("div");
+    card.id = "pp-slip-summary";
+    card.style.borderRadius = "18px";
+    card.style.border = "1px solid rgba(0,255,180,0.14)";
+    card.style.background = "rgba(0,0,0,0.14)";
+    card.style.boxShadow = "0 0 22px rgba(0,255,180,0.10)";
+    card.style.padding = "12px 12px 10px";
+    card.style.marginBottom = "12px";
+
+    card.innerHTML = `
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px;">
+        <div style="font-size:0.78rem; letter-spacing:0.14em; text-transform:uppercase; opacity:0.90;">
+          Parlay Summary
+        </div>
+        <div style="font-size:0.72rem; opacity:0.65; white-space:nowrap;">
+          Placeholder odds
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:10px;">
+        <div>
+          <div style="font-size:0.70rem; opacity:0.65; letter-spacing:0.10em; text-transform:uppercase; margin-bottom:6px;">Legs</div>
+          <div id="pp-slip-legs" style="font-size:1.05rem; font-weight:600;">0</div>
+        </div>
+
+        <div>
+          <div style="font-size:0.70rem; opacity:0.65; letter-spacing:0.10em; text-transform:uppercase; margin-bottom:6px;">Per-leg odds</div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <select id="pp-slip-odds-preset"
+              style="flex:1; padding:8px 10px; border-radius:999px; border:1px solid rgba(0,255,180,0.22); background:rgba(0,0,0,0.22); color:inherit; outline:none;">
+              <option value="-110">-110 (default)</option>
+              <option value="-120">-120</option>
+              <option value="-105">-105</option>
+              <option value="+100">+100</option>
+              <option value="custom">Custom</option>
+            </select>
+            <input id="pp-slip-odds-custom" type="number" inputmode="numeric" placeholder="-110"
+              style="width:84px; padding:8px 10px; border-radius:999px; border:1px solid rgba(0,255,180,0.22); background:rgba(0,0,0,0.22); color:inherit; outline:none; display:none;" />
+          </div>
+        </div>
+
+        <div style="grid-column:1 / -1;">
+          <div style="font-size:0.70rem; opacity:0.65; letter-spacing:0.10em; text-transform:uppercase; margin-bottom:6px;">Stake</div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <input id="pp-slip-stake" type="number" step="1" min="1" value="10"
+              style="flex:1; padding:8px 10px; border-radius:999px; border:1px solid rgba(0,255,180,0.22); background:rgba(0,0,0,0.22); color:inherit; outline:none;" />
+            <button id="pp-slip-build" type="button" class="player-pill" style="padding:8px 12px;">
+              Build Parlay (Coming Soon)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
+        <div style="min-width:0;">
+          <div style="font-size:0.70rem; opacity:0.65; letter-spacing:0.10em; text-transform:uppercase; margin-bottom:4px;">Estimated return</div>
+          <div id="pp-slip-return" style="font-size:1.05rem; font-weight:650;">—</div>
+          <div id="pp-slip-profit" style="font-size:0.80rem; opacity:0.70; margin-top:2px;">—</div>
+        </div>
+
+        <div style="font-size:0.72rem; opacity:0.62; line-height:1.35; max-width:220px;">
+          Uses assumed odds per leg to estimate payout. Real lines will replace this later.
+        </div>
+      </div>
+    `;
+
+    // Insert summary above the list
+    parent.insertBefore(card, listEl);
+
+    // Bind events once
+    bindSummaryEvents(card);
+
+    return card;
+  }
+
+  function getActiveAmericanOdds(card) {
+    const preset = card.querySelector("#pp-slip-odds-preset");
+    const custom = card.querySelector("#pp-slip-odds-custom");
+    if (!preset) return summaryState.perLegAmerican;
+
+    if (preset.value === "custom") {
+      const n = safeNumber(custom ? custom.value : null);
+      return n === null ? summaryState.perLegAmerican : n;
+    }
+
+    const n = safeNumber(preset.value);
+    return n === null ? summaryState.perLegAmerican : n;
+  }
+
+  function bindSummaryEvents(card) {
+    if (!card || card.dataset.bound === "true") return;
+    card.dataset.bound = "true";
+
+    const stakeInput = card.querySelector("#pp-slip-stake");
+    const preset = card.querySelector("#pp-slip-odds-preset");
+    const custom = card.querySelector("#pp-slip-odds-custom");
+    const buildBtn = card.querySelector("#pp-slip-build");
+
+    if (buildBtn) {
+      buildBtn.addEventListener("click", () => {
+        // Thread 9+ will wire DK lines + a true parlay builder
+        console.log("Build Parlay: coming soon.");
+      });
+    }
+
+    if (stakeInput) {
+      stakeInput.addEventListener("change", () => {
+        const n = safeNumber(stakeInput.value);
+        if (n !== null) summaryState.stake = clamp(n, 1, 100000);
+        renderSummary(); // recalc only
+      });
+    }
+
+    if (preset) {
+      preset.addEventListener("change", () => {
+        if (!custom) return;
+
+        if (preset.value === "custom") {
+          custom.style.display = "block";
+          custom.value = String(summaryState.perLegAmerican);
+          custom.focus();
+        } else {
+          custom.style.display = "none";
+          const n = safeNumber(preset.value);
+          if (n !== null) summaryState.perLegAmerican = n;
+        }
+        renderSummary();
+      });
+    }
+
+    if (custom) {
+      custom.addEventListener("change", () => {
+        const n = safeNumber(custom.value);
+        if (n !== null && n !== 0) summaryState.perLegAmerican = n;
+        renderSummary();
+      });
     }
   }
 
+  function renderSummary() {
+    const listEl = getListEl();
+    if (!listEl) return;
+
+    const card = ensureSummaryCard(listEl);
+    if (!card) return;
+
+    const legsEl = card.querySelector("#pp-slip-legs");
+    const retEl = card.querySelector("#pp-slip-return");
+    const profEl = card.querySelector("#pp-slip-profit");
+    const stakeInput = card.querySelector("#pp-slip-stake");
+
+    const legs = state.picks.length;
+    if (legsEl) legsEl.textContent = String(legs);
+
+    if (stakeInput && Number.isFinite(summaryState.stake)) {
+      stakeInput.value = String(Math.round(summaryState.stake));
+    }
+
+    if (!legs) {
+      if (retEl) retEl.textContent = "—";
+      if (profEl) profEl.textContent = "—";
+      return;
+    }
+
+    const american = getActiveAmericanOdds(card);
+    const perLegDecimal = americanToDecimal(american);
+
+    if (!Number.isFinite(perLegDecimal)) {
+      if (retEl) retEl.textContent = "—";
+      if (profEl) profEl.textContent = "Invalid odds";
+      return;
+    }
+
+    // Simple placeholder: all legs share same odds
+    const combinedDecimal = Math.pow(perLegDecimal, legs);
+    const stake = Number.isFinite(summaryState.stake) ? summaryState.stake : 10;
+    const totalReturn = stake * combinedDecimal;
+    const profit = totalReturn - stake;
+
+    if (retEl) retEl.textContent = fmtMoney(totalReturn);
+    if (profEl) profEl.textContent = `Profit: ${fmtMoney(profit)}`;
+  }
+
+  // ---------------------------
   // In-memory state
+  // ---------------------------
+
   const state = {
     picks: [],
   };
@@ -94,7 +312,6 @@
   function addPick(pick) {
     if (!pick || !pick.player_id || !pick.stat_key) return;
 
-    // Normalize
     const normalized = {
       id: pick.id || createId(),
       player_id: Number(pick.player_id),
@@ -112,7 +329,6 @@
     const newKey = pickKey(normalized);
     const existing = state.picks.find((p) => pickKey(p) === newKey);
 
-    // Duplicate: no new row. Scroll + pulse the existing row.
     if (existing) {
       render();
       setTimeout(() => flashPickRow(existing.id), 0);
@@ -148,10 +364,14 @@
     const listEl = getListEl();
     if (!listEl) return;
 
+    // Ensure / update summary first (so it exists even when list is empty)
+    ensureSummaryCard(listEl);
+
     listEl.innerHTML = "";
 
     if (!state.picks.length) {
       ensurePlaceholderIfEmpty(listEl);
+      renderSummary();
       return;
     }
 
@@ -174,7 +394,6 @@
       controls.style.alignItems = "center";
       controls.style.gap = "8px";
 
-      // Side toggle (OVER/UNDER)
       const sideBtn = document.createElement("button");
       sideBtn.type = "button";
       sideBtn.className = "player-pill";
@@ -183,7 +402,6 @@
         updatePick(p.id, { side: p.side === "OVER" ? "UNDER" : "OVER" });
       });
 
-      // Line input
       const lineWrap = document.createElement("div");
       lineWrap.style.display = "flex";
       lineWrap.style.alignItems = "center";
@@ -219,7 +437,6 @@
       lineWrap.appendChild(lineLabel);
       lineWrap.appendChild(lineInput);
 
-      // Remove
       const removeBtn = document.createElement("button");
       removeBtn.type = "button";
       removeBtn.className = "player-pill";
@@ -236,6 +453,8 @@
 
       listEl.appendChild(li);
     });
+
+    renderSummary();
   }
 
   // Expose API
@@ -247,5 +466,7 @@
     render,
   };
 
-  document.addEventListener("DOMContentLoaded", render);
+  document.addEventListener("DOMContentLoaded", () => {
+    render();
+  });
 })();
