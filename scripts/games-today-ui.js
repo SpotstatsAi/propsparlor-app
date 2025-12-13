@@ -1,215 +1,188 @@
-// functions/api/players/roster.js
-//
-// Route:
-//   GET /api/players/roster?team_id=14
-//   GET /api/players/roster?abbr=LAL
-//
-// Fetches NBA roster (players list) for a team.
-// - If team_id is provided, it is used directly.
-// - Otherwise, abbr is resolved -> team_id via /nba/v1/teams (cached in KV).
-// Uses KV caching for rosters to reduce BDL calls.
+// scripts/games-today-ui.js
+// Wires the "Today's Games" view to /api/stats/games-today without touching layout.
+// Thread 7: Clicking a game routes into Players & Props via window.PropsParlor.openPlayersForGame()
 
-const BASE_URL = "https://api.balldontlie.io";
+(function () {
+  // Use the existing Worker route: /api/stats/games-today
+  const GAMES_TODAY_URL = "/api/stats/games-today";
 
-function json(body, status = 200) {
-  return new Response(JSON.stringify(body, null, 2), {
-    status,
-    headers: {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
-    },
-  });
-}
+  async function fetchGamesToday() {
+    const res = await fetch(GAMES_TODAY_URL, {
+      headers: { Accept: "application/json" },
+    });
 
-async function kvGet(env, key) {
-  try {
-    return await env.PROPSPARLOR_BDL_CACHE.get(key);
-  } catch (err) {
-    console.error("KV get error:", key, err);
-    return null;
+    if (!res.ok) {
+      throw new Error(`API ${res.status}`);
+    }
+
+    const data = await res.json();
+
+    // Try to be flexible about the worker response shape.
+    let games = [];
+    if (Array.isArray(data.games)) {
+      games = data.games;
+    } else if (Array.isArray(data.data)) {
+      games = data.data;
+    } else if (Array.isArray(data.results)) {
+      games = data.results;
+    }
+
+    if (!data.ok && !games.length) {
+      const message =
+        (data.error && (data.error.message || data.error.code)) ||
+        "Unknown API error";
+      throw new Error(message);
+    }
+
+    return games;
   }
-}
 
-async function kvPut(env, key, value, ttlSeconds) {
-  try {
-    await env.PROPSPARLOR_BDL_CACHE.put(key, value, { expirationTtl: ttlSeconds });
-  } catch (err) {
-    console.error("KV put error:", key, err);
+  function getEl(id) {
+    return document.getElementById(id);
   }
-}
 
-function normalizeAbbr(abbr) {
-  return String(abbr || "")
-    .trim()
-    .toUpperCase()
-    .slice(0, 3);
-}
+  function formatTipoff(dateStr) {
+    if (!dateStr) return "TBD";
+    const d = new Date(dateStr);
+    if (Number.isNaN(d.getTime())) return "TBD";
 
-async function fetchTeamsMap({ env }) {
-  const cacheKey = "nba:teams-map:nba-v1";
-  const cached = await kvGet(env, cacheKey);
-  if (cached) {
+    return d.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }
+
+  function formatMatchup(game) {
+    const home =
+      game.home_team?.abbreviation ||
+      game.home_team?.name ||
+      game.home_team?.full_name ||
+      "HOME";
+    const away =
+      game.visitor_team?.abbreviation ||
+      game.visitor_team?.name ||
+      game.visitor_team?.full_name ||
+      "AWAY";
+
+    return `${away} @ ${home}`;
+  }
+
+  function formatStatus(game) {
+    if (game.status && typeof game.status === "string") {
+      return game.status;
+    }
+    return "Scheduled";
+  }
+
+  function showState({ loading, error, empty, hasData }) {
+    const loadingEl = getEl("games-today-loading");
+    const errorEl = getEl("games-today-error");
+    const emptyEl = getEl("games-today-empty");
+    const wrapperEl = getEl("games-today-wrapper");
+
+    if (!loadingEl || !errorEl || !emptyEl || !wrapperEl) return;
+
+    loadingEl.style.display = loading ? "" : "none";
+    errorEl.style.display = error ? "" : "none";
+    emptyEl.style.display = empty ? "" : "none";
+    wrapperEl.style.display = hasData ? "" : "none";
+  }
+
+  function onGameClick(gameLabel) {
+    // Route to players view if the handler exists (Thread 7).
+    if (
+      window.PropsParlor &&
+      typeof window.PropsParlor.openPlayersForGame === "function"
+    ) {
+      window.PropsParlor.openPlayersForGame(gameLabel);
+      return;
+    }
+
+    // Fallback: switch view by clicking nav (if present).
+    const navBtn = document.querySelector('.nav-item[data-view="players"]');
+    if (navBtn) navBtn.click();
+  }
+
+  function renderGames(games) {
+    const tbody = getEl("games-today-body");
+    if (!tbody) return;
+
+    if (!games.length) {
+      tbody.innerHTML = "";
+      showState({ loading: false, error: false, empty: true, hasData: false });
+      return;
+    }
+
+    const rows = games
+      .map((game, idx) => {
+        const matchup = formatMatchup(game);
+        const tipoff = formatTipoff(game.date || game.tipoff || game.time);
+        const status = formatStatus(game);
+
+        return `
+          <tr data-game-index="${idx}">
+            <td>${matchup}</td>
+            <td>${tipoff}</td>
+            <td>${status}</td>
+            <td style="text-align: right;">
+              <button
+                type="button"
+                class="games-table-cta"
+                data-game-label="${matchup.replace(/"/g, "&quot;")}"
+              >
+                View props / stats
+              </button>
+            </td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    tbody.innerHTML = rows;
+
+    // Bind click handlers (event delegation)
+    tbody.addEventListener(
+      "click",
+      (e) => {
+        const btn = e.target && e.target.closest
+          ? e.target.closest(".games-table-cta")
+          : null;
+        if (!btn) return;
+
+        const label = btn.getAttribute("data-game-label") || "Game selected";
+        onGameClick(label);
+      },
+      { passive: true }
+    );
+
+    showState({ loading: false, error: false, empty: false, hasData: true });
+  }
+
+  async function loadGamesToday() {
+    // Initial state: loading
+    showState({ loading: true, error: false, empty: false, hasData: false });
+
     try {
-      const obj = JSON.parse(cached);
-      if (obj && obj.ok && obj.map) return { ...obj, cache_source: "kv" };
-    } catch {
-      // ignore
+      const games = await fetchGamesToday();
+      renderGames(games);
+    } catch (err) {
+      console.error("Error loading games:", err);
+      showState({ loading: false, error: true, empty: false, hasData: false });
     }
   }
 
-  const url = new URL("/nba/v1/teams", BASE_URL);
-  const res = await fetch(url.toString(), {
-    method: "GET",
-    headers: {
-      Authorization: env.BDL_API_KEY,
-      Accept: "application/json",
-    },
-  });
-
-  if (!res.ok) {
-    const errorText = await res.text().catch(() => "");
-    return {
-      ok: false,
-      error: {
-        source: "BDL",
-        status: res.status,
-        message: "Failed to fetch teams from BallDontLie.",
-        details: errorText || null,
-      },
-    };
-  }
-
-  const data = await res.json().catch(() => null);
-  const rows = Array.isArray(data?.data) ? data.data : [];
-
-  const map = {};
-  for (const t of rows) {
-    const abbr = normalizeAbbr(t?.abbreviation);
-    if (!abbr) continue;
-    map[abbr] = {
-      id: t?.id,
-      abbreviation: abbr,
-      full_name: t?.full_name || null,
-      city: t?.city || null,
-      name: t?.name || null,
-      conference: t?.conference || null,
-      division: t?.division || null,
-    };
-  }
-
-  const payloadObj = { ok: true, map };
-  await kvPut(env, cacheKey, JSON.stringify(payloadObj, null, 2), 60 * 60 * 24); // 24h
-  return { ...payloadObj, cache_source: "live" };
-}
-
-async function fetchRosterByTeamId({ env, teamId }) {
-  const cacheKey = `nba:roster:team:${teamId}`;
-  const cached = await kvGet(env, cacheKey);
-  if (cached) {
-    try {
-      const obj = JSON.parse(cached);
-      if (obj && obj.ok) return { ...obj, cache_source: "kv" };
-    } catch {
-      // ignore
+  // Called from main.js
+  window.initGamesToday = function initGamesToday() {
+    if (
+      !getEl("games-today-loading") ||
+      !getEl("games-today-error") ||
+      !getEl("games-today-empty") ||
+      !getEl("games-today-wrapper") ||
+      !getEl("games-today-body")
+    ) {
+      return;
     }
-  }
 
-  const url = new URL("/nba/v1/players", BASE_URL);
-  url.searchParams.append("team_ids[]", String(teamId));
-  url.searchParams.set("per_page", "100");
-
-  const res = await fetch(url.toString(), {
-    method: "GET",
-    headers: {
-      Authorization: env.BDL_API_KEY,
-      Accept: "application/json",
-    },
-  });
-
-  if (!res.ok) {
-    const errorText = await res.text().catch(() => "");
-    return {
-      ok: false,
-      error: {
-        source: "BDL",
-        status: res.status,
-        message: "Failed to fetch roster players from BallDontLie.",
-        details: errorText || null,
-      },
-    };
-  }
-
-  const data = await res.json().catch(() => null);
-  const rows = Array.isArray(data?.data) ? data.data : [];
-
-  const cleaned = rows.map((p) => ({
-    id: p?.id,
-    first_name: p?.first_name || null,
-    last_name: p?.last_name || null,
-    full_name: `${p?.first_name || ""} ${p?.last_name || ""}`.trim(),
-    position: p?.position || null,
-    team: p?.team || null,
-  }));
-
-  const payloadObj = {
-    ok: true,
-    team_id: Number(teamId),
-    players: cleaned,
-    meta: data?.meta || null,
+    loadGamesToday();
   };
-
-  await kvPut(env, cacheKey, JSON.stringify(payloadObj, null, 2), 60 * 60 * 6); // 6h
-  return { ...payloadObj, cache_source: "live" };
-}
-
-export async function onRequest(context) {
-  const { request, env } = context;
-  const url = new URL(request.url);
-
-  const teamIdRaw = url.searchParams.get("team_id");
-  const abbrRaw = url.searchParams.get("abbr");
-
-  if (!env?.BDL_API_KEY) {
-    return json({ ok: false, error: { code: "NO_API_KEY", message: "BDL_API_KEY is not configured." } }, 500);
-  }
-  if (!env?.PROPSPARLOR_BDL_CACHE) {
-    return json({ ok: false, error: { code: "NO_KV", message: "PROPSPARLOR_BDL_CACHE is not configured." } }, 500);
-  }
-
-  let team = null;
-  let teamId = null;
-
-  if (teamIdRaw && /^\d+$/.test(teamIdRaw)) {
-    teamId = Number(teamIdRaw);
-    team = { id: teamId, abbreviation: null, full_name: null };
-  } else {
-    const abbr = normalizeAbbr(abbrRaw);
-    if (!abbr) {
-      return json(
-        { ok: false, error: { code: "BAD_REQUEST", message: "Provide `team_id` or `abbr` (example: /api/players/roster?abbr=LAL)." } },
-        400
-      );
-    }
-
-    const teamsMap = await fetchTeamsMap({ env });
-    if (!teamsMap.ok) return json(teamsMap, 502);
-
-    team = teamsMap.map?.[abbr] || null;
-    if (!team || !team.id) {
-      return json({ ok: false, error: { code: "TEAM_NOT_FOUND", message: `No team found for abbr "${abbr}".` } }, 404);
-    }
-    teamId = Number(team.id);
-  }
-
-  const roster = await fetchRosterByTeamId({ env, teamId });
-  if (!roster.ok) return json(roster, 502);
-
-  return json({
-    ok: true,
-    team,
-    team_id: teamId,
-    players: roster.players || [],
-    meta: roster.meta || null,
-    cache_source: roster.cache_source || "live",
-  });
-}
+})();
