@@ -1333,3 +1333,10 @@ button {
     padding: 12px;
   }
 }
+
+/* Thread 8 – Build Parlay button text centering (micro-fix) */
+#pp-slip-build {
+  padding: 0 12px;     /* remove vertical padding that can bias baseline */
+  line-height: 1;      /* prevents font baseline drift */
+  text-align: center;  /* safety */
+}
