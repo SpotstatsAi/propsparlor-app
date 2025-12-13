@@ -76,7 +76,10 @@
       row.animate(
         [
           { transform: "translateY(0px)", boxShadow: "0 0 0 rgba(0,0,0,0)" },
-          { transform: "translateY(-1px)", boxShadow: "0 0 0.85rem rgba(0,255,180,0.35)" },
+          {
+            transform: "translateY(-1px)",
+            boxShadow: "0 0 0.85rem rgba(0,255,180,0.35)",
+          },
           { transform: "translateY(0px)", boxShadow: "0 0 0 rgba(0,0,0,0)" },
         ],
         { duration: 650, easing: "ease-out" }
@@ -86,6 +89,7 @@
 
   // ---------------------------
   // Thread 8C — Parlay Summary (placeholder odds)
+  // (Kept for compatibility; does not override your index.html summary)
   // ---------------------------
 
   const summaryState = {
@@ -111,9 +115,11 @@
     const parent = listEl.parentElement;
     if (!parent) return null;
 
+    // If index.html already provides the summary, use it as-is.
     let card = parent.querySelector("#pp-slip-summary");
     if (card) return card;
 
+    // (Fallback only; normally not used since your index.html has it.)
     card = document.createElement("div");
     card.id = "pp-slip-summary";
     card.style.borderRadius = "18px";
@@ -180,10 +186,7 @@
       </div>
     `;
 
-    // Insert summary above the list
     parent.insertBefore(card, listEl);
-
-    // Bind events once
     bindSummaryEvents(card);
 
     return card;
@@ -214,7 +217,6 @@
 
     if (buildBtn) {
       buildBtn.addEventListener("click", () => {
-        // Thread 9+ will wire DK lines + a true parlay builder
         console.log("Build Parlay: coming soon.");
       });
     }
@@ -223,7 +225,7 @@
       stakeInput.addEventListener("change", () => {
         const n = safeNumber(stakeInput.value);
         if (n !== null) summaryState.stake = clamp(n, 1, 100000);
-        renderSummary(); // recalc only
+        renderSummary();
       });
     }
 
@@ -287,7 +289,6 @@
       return;
     }
 
-    // Simple placeholder: all legs share same odds
     const combinedDecimal = Math.pow(perLegDecimal, legs);
     const stake = Number.isFinite(summaryState.stake) ? summaryState.stake : 10;
     const totalReturn = stake * combinedDecimal;
@@ -380,51 +381,53 @@
       li.className = "slip-row";
       li.dataset.pickId = p.id;
 
+      // Side hook for styling (accent rail, etc.)
+      li.classList.add(p.side === "UNDER" ? "pick-under" : "pick-over");
+
+      // --- Header row (title left, tag right)
+      const header = document.createElement("div");
+      header.className = "slip-row-header";
+
       const title = document.createElement("div");
       title.className = "slip-row-title";
       title.textContent = `${p.player_name} · ${p.stat_label}`;
 
+      const tag = document.createElement("div");
+      tag.className = "slip-row-tag";
+      tag.textContent = `${p.side} · ${p.line.toFixed(1)}`;
+
+      header.appendChild(title);
+      header.appendChild(tag);
+
+      // --- Sub line
       const sub = document.createElement("div");
       sub.className = "slip-row-sub";
       sub.textContent = `${p.team} · ${p.tab}`;
 
+      // --- Controls row (no inline styles; CSS owns layout)
       const controls = document.createElement("div");
-      controls.style.display = "flex";
-      controls.style.flexWrap = "wrap";
-      controls.style.alignItems = "center";
-      controls.style.gap = "8px";
+      controls.className = "slip-row-controls";
 
       const sideBtn = document.createElement("button");
       sideBtn.type = "button";
-      sideBtn.className = "player-pill";
+      sideBtn.className = "slip-action slip-toggle";
       sideBtn.textContent = p.side;
       sideBtn.addEventListener("click", () => {
         updatePick(p.id, { side: p.side === "OVER" ? "UNDER" : "OVER" });
       });
 
       const lineWrap = document.createElement("div");
-      lineWrap.style.display = "flex";
-      lineWrap.style.alignItems = "center";
-      lineWrap.style.gap = "6px";
+      lineWrap.className = "slip-line";
 
       const lineLabel = document.createElement("span");
-      lineLabel.style.fontSize = "0.72rem";
-      lineLabel.style.opacity = "0.75";
-      lineLabel.style.letterSpacing = "0.08em";
-      lineLabel.style.textTransform = "uppercase";
+      lineLabel.className = "slip-line-label";
       lineLabel.textContent = "Line";
 
       const lineInput = document.createElement("input");
+      lineInput.className = "slip-line-input";
       lineInput.type = "number";
       lineInput.step = "0.5";
       lineInput.value = p.line.toFixed(1);
-      lineInput.style.width = "72px";
-      lineInput.style.padding = "8px 10px";
-      lineInput.style.borderRadius = "999px";
-      lineInput.style.border = "1px solid rgba(0,255,180,0.22)";
-      lineInput.style.background = "rgba(0,0,0,0.22)";
-      lineInput.style.color = "inherit";
-      lineInput.style.outline = "none";
 
       lineInput.addEventListener("keydown", (e) => {
         if (e.key === "Enter") lineInput.blur();
@@ -439,15 +442,16 @@
 
       const removeBtn = document.createElement("button");
       removeBtn.type = "button";
-      removeBtn.className = "player-pill";
+      removeBtn.className = "slip-action slip-remove";
       removeBtn.textContent = "Remove";
+      removeBtn.setAttribute("aria-label", "Remove pick");
       removeBtn.addEventListener("click", () => removePick(p.id));
 
       controls.appendChild(sideBtn);
       controls.appendChild(lineWrap);
       controls.appendChild(removeBtn);
 
-      li.appendChild(title);
+      li.appendChild(header);
       li.appendChild(sub);
       li.appendChild(controls);
 
