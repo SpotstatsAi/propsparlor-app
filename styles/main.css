@@ -1133,3 +1133,67 @@ button {
   line-height: 1.35;
   pointer-events: none;
 }
+
+/* =========================================================
+   Thread 8 – Pick Slip formatting fix (row layout + controls)
+   ========================================================= */
+
+.slip-row {
+  padding: 12px 12px;
+}
+
+.slip-row-header {
+  /* override inline "display:flex" from slip.js */
+  display: grid !important;
+  grid-template-columns: 1fr;
+  align-items: start;
+  gap: 10px;
+}
+
+.slip-row-title {
+  font-size: 0.92rem;
+  letter-spacing: 0.02em;
+}
+
+.slip-row-sub {
+  font-size: 0.78rem;
+  opacity: 0.8;
+}
+
+/* Right controls area */
+.slip-row-header > div:last-child {
+  /* override inline flex settings */
+  width: 100%;
+  justify-content: flex-start !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+}
+
+/* Make the “Line” group look like a pill row */
+.slip-row input[type="number"] {
+  width: 88px;
+  max-width: 100%;
+  height: 34px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.22);
+  color: inherit;
+}
+
+/* Optional: reduce the “Line” label visual weight */
+.slip-row .status-label {
+  opacity: 0.7;
+}
+
+/* Keep summary chip from forcing overflow */
+.slip-row .panel-tag {
+  max-width: 100%;
+}
+
+/* Tighten buttons so they fit cleanly */
+.slip-row .player-pill {
+  padding: 6px 10px;
+  min-height: 34px;
+  line-height: 1;
+}
