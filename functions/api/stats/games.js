@@ -1,20 +1,12 @@
-// functions/api/stats/games.js
+// /functions/api/stats/games.js
 // Route: GET /api/stats/games?player_id=237&season=2024
 //
-// Returns raw player game stats rows from BallDontLie via:
-// GET https://api.balldontlie.io/v1/stats?player_ids[]=...&seasons[]=...&per_page=100
-//
-// Note: BDL auth header is Authorization: YOUR_API_KEY (no Bearer). :contentReference[oaicite:6]{index=6}
-
-const BASE_URL = "https://api.balldontlie.io";
+// Returns raw current-season game logs from BallDontLie.
 
 function jsonResponse(body, init = {}) {
   return new Response(JSON.stringify(body), {
     status: init.status || 200,
-    headers: {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
-    },
+    headers: { "Content-Type": "application/json" }
   });
 }
 
@@ -35,20 +27,22 @@ export async function onRequest({ request, env }) {
     return error(500, "NO_API_KEY", "BDL_API_KEY is not configured.");
   }
 
-  const bdlUrl = new URL("/v1/stats", BASE_URL);
-  bdlUrl.searchParams.append("player_ids[]", String(playerId));
-  bdlUrl.searchParams.append("seasons[]", String(season));
-  bdlUrl.searchParams.set("per_page", "100");
+  // Simple: one call, 100 games max (more than enough for a season)
+  const bdlUrl =
+    `https://api.balldontlie.io/v1/stats` +
+    `?player_ids[]=${encodeURIComponent(playerId)}` +
+    `&seasons[]=${encodeURIComponent(season)}` +
+    `&per_page=100`;
 
   let res;
   try {
-    res = await fetch(bdlUrl.toString(), {
+    res = await fetch(bdlUrl, {
       headers: {
         Accept: "application/json",
-        Authorization: apiKey,
-      },
+        Authorization: `Bearer ${apiKey}`
+      }
     });
-  } catch {
+  } catch (e) {
     return error(502, "BDL_FETCH_FAILED", "Failed to reach BallDontLie.");
   }
 
@@ -59,7 +53,7 @@ export async function onRequest({ request, env }) {
   let json;
   try {
     json = await res.json();
-  } catch {
+  } catch (e) {
     return error(502, "BDL_PARSE_ERROR", "Could not parse BallDontLie JSON.");
   }
 
@@ -70,7 +64,6 @@ export async function onRequest({ request, env }) {
     player_id: Number(playerId),
     season: Number(season),
     count: games.length,
-    data: games,
-    meta: json.meta || null,
+    data: games
   });
 }
