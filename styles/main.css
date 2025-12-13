@@ -1392,3 +1392,66 @@ button {
     padding-right: 0;
   }
 }
+/* =========================================================
+   Thread 8 – Right sidebar: proper sticky + internal scroll (no double-scroll)
+   Requires index.html structure you pasted (matches .sidebar-right > .panel.slip-panel)
+   ========================================================= */
+
+/* Keep the column sticky/aligned, but DO NOT scroll the whole column */
+.sidebar-right {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+
+  /* key change: no column scrolling */
+  overflow: visible;
+  max-height: none;
+}
+
+/* Make the slip panel itself the "viewport" */
+.sidebar-right .panel.slip-panel {
+  max-height: calc(100vh - 48px);
+  overflow: hidden;          /* prevents the panel from spilling */
+  display: flex;
+  flex-direction: column;
+  min-height: 0;             /* enables inner flex children to scroll */
+}
+
+/* Parlay summary should not shrink weirdly */
+#pp-slip-summary {
+  flex: 0 0 auto;
+}
+
+/* The list is the scroll region */
+.slip-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+
+  /* keeps spacing consistent when it becomes scrollable */
+  padding-right: 6px;
+}
+
+/* Optional: keeps the list from looking "cramped" against the panel edge */
+.slip-row,
+.slip-placeholder-row {
+  margin-right: 2px;
+}
+
+/* Mobile: no sticky, natural flow */
+@media (max-width: 960px) {
+  .sidebar-right {
+    position: static;
+    top: auto;
+  }
+
+  .sidebar-right .panel.slip-panel {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .slip-list {
+    overflow: visible;
+    padding-right: 0;
+  }
+}
