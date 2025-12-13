@@ -1455,3 +1455,108 @@ button {
     padding-right: 0;
   }
 }
+
+/* =========================================================
+   Thread 8 – Right rail UX polish (safe, CSS-only)
+   - Hide verbose intro copy
+   - Compact Parlay Summary
+   - Fix Build Parlay button alignment
+   - Ensure picks are fully visible (no clipping)
+   ========================================================= */
+
+/* 1) Remove the non-essential paragraph to reclaim vertical space */
+.sidebar-right .slip-panel > p.panel-text {
+  display: none;
+}
+
+/* 2) Compact Parlay Summary container */
+#pp-slip-summary {
+  padding: 10px 10px 10px;     /* smaller than before */
+  border-radius: 14px;
+}
+
+/* Header row: tighter */
+#pp-slip-summary .pp-slip-summary-head {
+  margin-bottom: 8px;
+}
+
+#pp-slip-summary .pp-slip-summary-title,
+#pp-slip-summary .pp-slip-summary-tag {
+  font-size: 0.82rem;
+  line-height: 1.1;
+}
+
+/* Grid blocks: tighter spacing */
+#pp-slip-summary .pp-slip-summary-grid {
+  gap: 10px;
+}
+
+/* Kicker + values smaller */
+#pp-slip-summary .pp-slip-kicker {
+  font-size: 0.72rem;
+  opacity: 0.75;
+}
+
+#pp-slip-summary .pp-slip-value {
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+
+/* Select / input: compact + consistent */
+#pp-slip-summary .pp-slip-select,
+#pp-slip-summary .pp-slip-input {
+  height: 34px;
+  font-size: 0.8rem;
+  border-radius: 10px;
+}
+
+/* Stake label tighter */
+#pp-slip-summary .pp-slip-label {
+  font-size: 0.72rem;
+  opacity: 0.8;
+}
+
+/* Return row: compact typography */
+#pp-slip-summary .pp-slip-money {
+  font-size: 0.95rem;
+  line-height: 1.15;
+}
+
+/* Helper copy: smaller */
+#pp-slip-summary .pp-slip-helper {
+  font-size: 0.72rem;
+  line-height: 1.25;
+  margin-top: 6px;
+}
+
+/* 3) Build Parlay button: force proper alignment + no drift */
+#pp-slip-build.slip-button {
+  width: 100%;
+  margin: 8px 0 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  box-sizing: border-box;
+  text-align: center;
+
+  /* long label safety */
+  white-space: normal;
+  line-height: 1.15;
+
+  /* slightly smaller so it never feels cramped */
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+  padding: 10px 12px;
+}
+
+/* 4) Picks visibility: avoid clipping inside slip rows */
+.slip-row {
+  overflow: visible; /* was hiding parts of content when tight */
+}
+
+/* Give the scrolling list a touch more usable space */
+.slip-list {
+  margin-top: 8px;
+  padding-bottom: 8px;
+}
