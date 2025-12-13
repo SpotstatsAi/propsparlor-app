@@ -1334,9 +1334,61 @@ button {
   }
 }
 
-/* Thread 8 – Build Parlay button text centering (micro-fix) */
-#pp-slip-build {
-  padding: 0 12px;     /* remove vertical padding that can bias baseline */
-  line-height: 1;      /* prevents font baseline drift */
-  text-align: center;  /* safety */
+/* =========================================================
+   Thread 8 – Sticky sidebars (left + right) + alignment + scroll
+   Fixes:
+   - right rail misalignment
+   - right rail not scrollable
+   - left rail sticky + scrollable
+   ========================================================= */
+
+/* Ensure the 3 columns align from the same top edge */
+.layout-grid {
+  align-items: start;
+}
+
+/* LEFT SIDEBAR: sticky + internal scroll */
+.sidebar-left {
+  position: sticky;
+  top: 24px;
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  align-self: start;
+
+  /* optional: prevents content from feeling cramped when scrollbar appears */
+  padding-right: 10px;
+}
+
+/* RIGHT SIDEBAR: sticky + stable height */
+.sidebar-right {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+  max-height: calc(100vh - 48px);
+
+  /* allow the whole right rail to scroll if needed (summary + legs) */
+  overflow: auto;
+}
+
+/* If a panel inside the right rail was forcing clipping, relax it */
+.sidebar-right .panel {
+  max-height: none;
+  overflow: visible;
+}
+
+/* Keep slip internals behaving (list still scrolls nicely when constrained) */
+.slip-panel {
+  min-height: 0;
+}
+
+/* Mobile: turn off sticky behavior */
+@media (max-width: 960px) {
+  .sidebar-left,
+  .sidebar-right {
+    position: static;
+    top: auto;
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+  }
 }
