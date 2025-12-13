@@ -7,7 +7,7 @@
 // Enhancements:
 // - Editable OVER / UNDER
 // - Editable LINE
-// - Live in-memory updates (no backend)
+// - Duplicate-pick feedback: scroll + pulse highlight (no duplicate rows)
 
 (function () {
   const DEFAULT_SIDE = "OVER";
@@ -52,6 +52,37 @@
     return `pick_${Date.now()}_${Math.random().toString(16).slice(2)}`;
   }
 
+  function safeNumber(v) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function flashPickRow(pickId) {
+    const listEl = getListEl();
+    if (!listEl) return;
+
+    const row = listEl.querySelector(`[data-pick-id="${pickId}"]`);
+    if (!row) return;
+
+    // Scroll it into view in the slip panel
+    row.scrollIntoView({ behavior: "smooth", block: "nearest" });
+
+    // Pulse highlight without requiring CSS changes
+    try {
+      row.animate(
+        [
+          { transform: "translateY(0px)", boxShadow: "0 0 0 rgba(0,0,0,0)" },
+          { transform: "translateY(-1px)", boxShadow: "0 0 0.85rem rgba(0,255,180,0.35)" },
+          { transform: "translateY(0px)", boxShadow: "0 0 0 rgba(0,0,0,0)" },
+        ],
+        { duration: 650, easing: "ease-out" }
+      );
+    } catch (_) {
+      // no-op (older browsers)
+    }
+  }
+
+  // In-memory state
   const state = {
     picks: [],
   };
@@ -63,6 +94,7 @@
   function addPick(pick) {
     if (!pick || !pick.player_id || !pick.stat_key) return;
 
+    // Normalize
     const normalized = {
       id: pick.id || createId(),
       player_id: Number(pick.player_id),
@@ -77,27 +109,34 @@
 
     if (!Number.isFinite(normalized.line)) return;
 
-    const exists = state.picks.some((p) => pickKey(p) === pickKey(normalized));
-    if (exists) {
+    const newKey = pickKey(normalized);
+    const existing = state.picks.find((p) => pickKey(p) === newKey);
+
+    // Duplicate: no new row. Scroll + pulse the existing row.
+    if (existing) {
       render();
+      setTimeout(() => flashPickRow(existing.id), 0);
       return;
     }
 
     state.picks.push(normalized);
     render();
+    setTimeout(() => flashPickRow(normalized.id), 0);
   }
 
   function updatePick(id, updates) {
     const p = state.picks.find((x) => x.id === id);
     if (!p) return;
 
-    if (updates.side) p.side = updates.side;
+    if (updates.side) p.side = String(updates.side).toUpperCase();
+
     if (updates.line !== undefined) {
-      const n = roundToHalf(Number(updates.line));
-      if (Number.isFinite(n)) p.line = n;
+      const n = safeNumber(updates.line);
+      if (n !== null) p.line = roundToHalf(n);
     }
 
     render();
+    setTimeout(() => flashPickRow(p.id), 0);
   }
 
   function removePick(id) {
@@ -119,6 +158,7 @@
     state.picks.forEach((p) => {
       const li = document.createElement("li");
       li.className = "slip-row";
+      li.dataset.pickId = p.id;
 
       const title = document.createElement("div");
       title.className = "slip-row-title";
@@ -131,10 +171,12 @@
       const controls = document.createElement("div");
       controls.style.display = "flex";
       controls.style.flexWrap = "wrap";
+      controls.style.alignItems = "center";
       controls.style.gap = "8px";
 
-      // OVER / UNDER toggle
+      // Side toggle (OVER/UNDER)
       const sideBtn = document.createElement("button");
+      sideBtn.type = "button";
       sideBtn.className = "player-pill";
       sideBtn.textContent = p.side;
       sideBtn.addEventListener("click", () => {
@@ -142,22 +184,50 @@
       });
 
       // Line input
+      const lineWrap = document.createElement("div");
+      lineWrap.style.display = "flex";
+      lineWrap.style.alignItems = "center";
+      lineWrap.style.gap = "6px";
+
+      const lineLabel = document.createElement("span");
+      lineLabel.style.fontSize = "0.72rem";
+      lineLabel.style.opacity = "0.75";
+      lineLabel.style.letterSpacing = "0.08em";
+      lineLabel.style.textTransform = "uppercase";
+      lineLabel.textContent = "Line";
+
       const lineInput = document.createElement("input");
       lineInput.type = "number";
       lineInput.step = "0.5";
       lineInput.value = p.line.toFixed(1);
+      lineInput.style.width = "72px";
+      lineInput.style.padding = "8px 10px";
+      lineInput.style.borderRadius = "999px";
+      lineInput.style.border = "1px solid rgba(0,255,180,0.22)";
+      lineInput.style.background = "rgba(0,0,0,0.22)";
+      lineInput.style.color = "inherit";
+      lineInput.style.outline = "none";
+
+      lineInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") lineInput.blur();
+      });
+
       lineInput.addEventListener("change", () => {
         updatePick(p.id, { line: lineInput.value });
       });
 
+      lineWrap.appendChild(lineLabel);
+      lineWrap.appendChild(lineInput);
+
       // Remove
       const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
       removeBtn.className = "player-pill";
       removeBtn.textContent = "Remove";
       removeBtn.addEventListener("click", () => removePick(p.id));
 
       controls.appendChild(sideBtn);
-      controls.appendChild(lineInput);
+      controls.appendChild(lineWrap);
       controls.appendChild(removeBtn);
 
       li.appendChild(title);
@@ -168,6 +238,7 @@
     });
   }
 
+  // Expose API
   const global = ensureGlobal();
   global.Slip = {
     addPick,
