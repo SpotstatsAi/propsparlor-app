@@ -1109,3 +1109,27 @@ button {
 @media (max-width: 760px) {
   #player-sparklines { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
 }
+
+/* --- Thread 7: Chart footer alignment fix --- */
+
+/* Main chart scroll area = SVG ONLY */
+#player-main-chart {
+  display: block;
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+/* Inner scroll track (SVG wrapper) */
+.player-chart-scroll {
+  display: block;
+  width: max-content;
+}
+
+/* Footer text below chart — NOT scrollable */
+.player-chart-footer {
+  margin-top: 8px;
+  font-size: 0.72rem;
+  opacity: 0.72;
+  line-height: 1.35;
+  pointer-events: none;
+}
