@@ -578,6 +578,10 @@
     if (sparks.dataset.wheelBound === "true") return;
     sparks.dataset.wheelBound = "true";
 
+    // Never allow the sparks row to show a horizontal scrollbar
+    sparks.style.overflowX = "hidden";
+    sparks.style.overflowY = "visible";
+
     sparks.addEventListener(
       "wheel",
       (e) => {
@@ -830,7 +834,7 @@
     const pointsW = 28 * Math.max(10, mainVals.length);
     const svgW = Math.max(baseW, pointsW);
 
-    // IMPORTANT: footer is OUTSIDE the scroll region to prevent the “cutoff/misalignment” you saw.
+    // Footer is OUTSIDE scroll region (prevents cutoff/misalignment).
     main.innerHTML = `
       <div class="pp-chart-head" style="display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:8px;">
         <div style="font-size:.82rem; letter-spacing:.12em; text-transform:uppercase; opacity:.88;">
