@@ -121,8 +121,21 @@ body {
   box-shadow: 0 12px 26px rgba(0, 0, 0, 0.85);
 }
 
+/* Thread 8: right rail alignment + stable slip panel containment */
 .sidebar-right {
   padding: 0;
+  align-self: start;
+  position: sticky;
+  top: 24px;
+}
+
+/* Ensure the slip panel scrolls internally instead of blowing out the column */
+.sidebar-right .panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: calc(100vh - 48px);
+  overflow: hidden;
 }
 
 /* Sidebar content */
@@ -388,12 +401,22 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-height: 0; /* critical for nested scroll */
 }
 
 .slip-list {
   list-style: none;
   margin-top: 4px;
   margin-bottom: 10px;
+  padding: 0;
+
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  flex: 1;
+  min-height: 0;
+  overflow: auto; /* internal scroll */
 }
 
 .slip-placeholder-row {
@@ -416,24 +439,28 @@ body {
 }
 
 .slip-row {
-  padding: 10px 10px;
+  padding: 12px 12px;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: radial-gradient(circle at top left, rgba(18, 26, 68, 0.62), rgba(4, 4, 18, 0.92));
-  margin-bottom: 8px;
+  margin-bottom: 0;
+  overflow: hidden; /* prevent odd child overflow */
 }
 
 .slip-row-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+  display: grid !important;
+  grid-template-columns: 1fr auto;
+  align-items: start;
   gap: 10px;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
+  min-width: 0;
 }
 
 .slip-row-title {
-  font-size: 0.78rem;
+  font-size: 0.9rem;
   letter-spacing: 0.02em;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .slip-row-tag {
@@ -444,27 +471,79 @@ body {
   background: rgba(0, 20, 20, 0.55);
   opacity: 0.9;
   white-space: nowrap;
+  justify-self: end;
 }
 
 .slip-row-sub {
-  font-size: 0.7rem;
+  font-size: 0.78rem;
   opacity: 0.82;
   line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
+/* Controls container inside header (whatever slip.js renders last) */
+.slip-row-header > div:last-child {
+  width: auto;
+  display: flex !important;
+  justify-content: flex-end !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  min-width: 0;
+}
+
+/* Inputs inside slip rows */
+.slip-row input[type="number"],
+.slip-row input[type="text"],
+.slip-row select {
+  height: 34px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.22);
+  color: inherit;
+  max-width: 100%;
+}
+
+.slip-row input[type="number"] {
+  width: 92px;
+}
+
+/* Tighten pill-like buttons inside slip */
+.slip-row button,
+.slip-row .player-pill {
+  min-height: 34px;
+  padding: 6px 10px;
+  line-height: 1;
+}
+
+/* Optional: reduce the “Line” label visual weight if slip.js uses status-label */
+.slip-row .status-label {
+  opacity: 0.7;
+}
+
+/* Keep summary chip from forcing overflow */
+.slip-row .panel-tag {
+  max-width: 100%;
+}
+
+/* Bottom slip CTA (if present) */
 .slip-button {
   width: 100%;
   margin-top: auto;
-  padding: 8px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  background: radial-gradient(circle at 0 0, rgba(0, 255, 180, 0.24), rgba(6, 6, 24, 0.96));
-  color: rgba(245, 245, 255, 0.85);
-  font-size: 0.82rem;
-  letter-spacing: 0.08em;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 255, 180, 0.35);
+  background: radial-gradient(circle at 0 0, rgba(0, 255, 180, 0.22), rgba(6, 6, 24, 0.96));
+  color: rgba(245, 245, 255, 0.9);
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   cursor: not-allowed;
-  opacity: 0.6;
+  opacity: 0.65;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 0 22px rgba(0, 255, 180, 0.12);
 }
 
 /* Footer */
@@ -484,6 +563,13 @@ body {
 
   .sidebar-right {
     order: 3;
+    position: static;
+    top: auto;
+  }
+
+  .sidebar-right .panel {
+    max-height: none;
+    overflow: visible;
   }
 }
 
@@ -502,6 +588,15 @@ body {
 
   .header-meta {
     display: none;
+  }
+
+  .slip-row-header {
+    grid-template-columns: 1fr;
+  }
+
+  .slip-row-header > div:last-child {
+    justify-content: flex-start !important;
+    width: 100%;
   }
 }
 
@@ -1135,72 +1230,8 @@ button {
 }
 
 /* =========================================================
-   Thread 8 – Pick Slip formatting fix (row layout + controls)
-   ========================================================= */
-
-.slip-row {
-  padding: 12px 12px;
-}
-
-.slip-row-header {
-  /* override inline "display:flex" from slip.js */
-  display: grid !important;
-  grid-template-columns: 1fr;
-  align-items: start;
-  gap: 10px;
-}
-
-.slip-row-title {
-  font-size: 0.92rem;
-  letter-spacing: 0.02em;
-}
-
-.slip-row-sub {
-  font-size: 0.78rem;
-  opacity: 0.8;
-}
-
-/* Right controls area */
-.slip-row-header > div:last-child {
-  /* override inline flex settings */
-  width: 100%;
-  justify-content: flex-start !important;
-  flex-wrap: wrap !important;
-  gap: 8px !important;
-}
-
-/* Make the “Line” group look like a pill row */
-.slip-row input[type="number"] {
-  width: 88px;
-  max-width: 100%;
-  height: 34px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(0, 0, 0, 0.22);
-  color: inherit;
-}
-
-/* Optional: reduce the “Line” label visual weight */
-.slip-row .status-label {
-  opacity: 0.7;
-}
-
-/* Keep summary chip from forcing overflow */
-.slip-row .panel-tag {
-  max-width: 100%;
-}
-
-/* Tighten buttons so they fit cleanly */
-.slip-row .player-pill {
-  padding: 6px 10px;
-  min-height: 34px;
-  line-height: 1;
-}
-
-/* ============================
    THREAD 8 – PARLAY SUMMARY FIX
-   ============================ */
+   ========================================================= */
 
 #pp-slip-summary {
   padding: 14px 14px 12px;
@@ -1213,6 +1244,7 @@ button {
   border: 1px solid rgba(0, 255, 180, 0.18);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03),
     0 0 22px rgba(0, 255, 180, 0.12);
+  overflow: hidden;
 }
 
 /* Header alignment */
@@ -1230,6 +1262,7 @@ button {
 #pp-slip-summary select {
   height: 38px;
   font-size: 0.82rem;
+  border-radius: 12px;
 }
 
 /* Stake row */
@@ -1243,6 +1276,12 @@ button {
   height: 38px;
   font-size: 0.78rem;
   white-space: nowrap;
+  width: 100%;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 12px;
 }
 
 /* Estimated return section */
@@ -1258,26 +1297,10 @@ button {
 
 /* Prevent helper text from breaking layout */
 #pp-slip-summary .pp-slip-helper {
-  max-width: 180px;
+  max-width: 100%;
   line-height: 1.3;
   opacity: 0.6;
-}
-
-/* Mobile safety */
-@media (max-width: 920px) {
-  #pp-slip-summary {
-    padding: 12px;
-  }
-}
-
-/* ============================
-   THREAD 8 – PARLAY SUMMARY FIX (PATCH 2)
-   - constrain button
-   - fix return row alignment
-   ============================ */
-
-#pp-slip-summary {
-  overflow: hidden; /* prevents any child from visually spilling out */
+  white-space: normal;
 }
 
 /* Force the control area into a stable grid so the button can't drift */
@@ -1288,16 +1311,6 @@ button {
   margin-top: 10px;
 }
 
-/* Make the build button full-width and visually consistent */
-#pp-slip-build {
-  width: 100%;
-  display: inline-flex;
-  justify-content: center;
-  align-items: center;
-  padding: 10px 12px;
-  border-radius: 12px;
-}
-
 /* Fix the Estimated Return row so labels and values align cleanly */
 #pp-slip-summary .pp-slip-return-row {
   display: grid;
@@ -1306,16 +1319,17 @@ button {
   margin-top: 8px;
 }
 
-/* Keep helper copy from pushing layout */
-#pp-slip-summary .pp-slip-helper {
-  max-width: 100%;
-  white-space: normal;
-}
-
 /* Optional: slightly tighten the left/right header spacing */
 #pp-slip-summary .pp-slip-summary-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+}
+
+/* Mobile safety */
+@media (max-width: 920px) {
+  #pp-slip-summary {
+    padding: 12px;
+  }
 }
