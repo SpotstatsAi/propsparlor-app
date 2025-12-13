@@ -1269,3 +1269,53 @@ button {
     padding: 12px;
   }
 }
+
+/* ============================
+   THREAD 8 – PARLAY SUMMARY FIX (PATCH 2)
+   - constrain button
+   - fix return row alignment
+   ============================ */
+
+#pp-slip-summary {
+  overflow: hidden; /* prevents any child from visually spilling out */
+}
+
+/* Force the control area into a stable grid so the button can't drift */
+#pp-slip-summary .pp-slip-controls {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+/* Make the build button full-width and visually consistent */
+#pp-slip-build {
+  width: 100%;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 12px;
+}
+
+/* Fix the Estimated Return row so labels and values align cleanly */
+#pp-slip-summary .pp-slip-return-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+/* Keep helper copy from pushing layout */
+#pp-slip-summary .pp-slip-helper {
+  max-width: 100%;
+  white-space: normal;
+}
+
+/* Optional: slightly tighten the left/right header spacing */
+#pp-slip-summary .pp-slip-summary-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
