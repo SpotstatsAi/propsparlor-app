@@ -12,7 +12,7 @@
   const AVERAGES_API_URL = "/api/stats/averages";
   const GAMELOG_API_URL = "/api/stats/gamelog";
 
-  // NEW: roster endpoint (real players per matchup)
+  // Roster endpoint
   const ROSTER_API_URL = "/api/players/roster";
 
   const DEMO_PLAYERS = [
@@ -31,8 +31,8 @@
   const statsCache = Object.create(null);   // key: `${playerId}:${tab}`
   const gamelogCache = Object.create(null); // key: `${playerId}` -> array
 
-  // NEW: roster cache (front-end)
-  const rosterCache = Object.create(null); // key: `abbr:${LAL}` -> array
+  // Front-end roster cache
+  const rosterCache = Object.create(null); // key: `team:${id}` OR `abbr:${LAL}` -> array
 
   function initPlayerViewPlaceholders() {
     const addSlipBtn = document.getElementById("player-add-slip");
@@ -49,8 +49,6 @@
     updateStatMeters(null);
 
     renderChartPlaceholders();
-
-    // Single-scrollbar UX: spark-row wheel/trackpad horizontally scrolls the main chart.
     bindSparkWheelToMainChart();
   }
 
@@ -359,26 +357,56 @@
     return { away, home };
   }
 
-  async function fetchRosterByAbbr(abbr) {
-    const key = `abbr:${abbr}`;
-    if (rosterCache[key]) return rosterCache[key];
+  async function fetchRosterByTeamRef(teamRef) {
+    // teamRef: { id, abbr }
+    const id = teamRef && teamRef.id ? Number(teamRef.id) : null;
+    const abbr = teamRef && teamRef.abbr ? String(teamRef.abbr).trim().toUpperCase().slice(0, 3) : null;
 
-    const url = `${ROSTER_API_URL}?abbr=${encodeURIComponent(abbr)}`;
-    const res = await fetch(url, { headers: { Accept: "application/json" } });
-    const payload = await res.json().catch(() => null);
+    if (id) {
+      const cacheKey = `team:${id}`;
+      if (rosterCache[cacheKey]) return rosterCache[cacheKey];
 
-    if (!res.ok || !payload || payload.ok === false) {
-      console.error("Roster API error", abbr, res.status, payload);
-      return null;
+      const url = `${ROSTER_API_URL}?team_id=${encodeURIComponent(id)}`;
+      const res = await fetch(url, { headers: { Accept: "application/json" } });
+      const payload = await res.json().catch(() => null);
+
+      if (!res.ok || !payload || payload.ok === false) {
+        console.error("Roster API error (team_id)", id, res.status, payload);
+        return null;
+      }
+
+      const players = Array.isArray(payload.players) ? payload.players : [];
+      rosterCache[cacheKey] = players;
+      return players;
     }
 
-    const players = Array.isArray(payload.players) ? payload.players : [];
-    rosterCache[key] = players;
-    return players;
+    if (abbr) {
+      const cacheKey = `abbr:${abbr}`;
+      if (rosterCache[cacheKey]) return rosterCache[cacheKey];
+
+      const url = `${ROSTER_API_URL}?abbr=${encodeURIComponent(abbr)}`;
+      const res = await fetch(url, { headers: { Accept: "application/json" } });
+      const payload = await res.json().catch(() => null);
+
+      if (!res.ok || !payload || payload.ok === false) {
+        console.error("Roster API error (abbr)", abbr, res.status, payload);
+        return null;
+      }
+
+      const players = Array.isArray(payload.players) ? payload.players : [];
+      rosterCache[cacheKey] = players;
+      return players;
+    }
+
+    return null;
   }
 
   function normalizeRosterPlayer(p) {
-    const fullName = (p?.full_name || `${p?.first_name || ""} ${p?.last_name || ""}`.trim() || "").trim();
+    const fullName =
+      (p?.full_name ||
+        `${p?.first_name || ""} ${p?.last_name || ""}`.trim() ||
+        "").trim();
+
     const teamAbbr =
       (p?.team && (p.team.abbreviation || p.team.abbr || p.team.code)) ||
       p?.team_abbr ||
@@ -391,65 +419,6 @@
       position: p?.position || "—",
       bdlId: p?.id || null,
     };
-  }
-
-  async function renderPlayersForMatchup(gameLabel) {
-    const introEl = document.getElementById("players-list-intro");
-    const gridEl = document.getElementById("players-list-grid");
-    if (!gridEl) return;
-
-    gridEl.innerHTML = "";
-
-    const teams = extractTeamsFromLabel(gameLabel);
-
-    // Try real rosters first (if we can parse teams)
-    if (teams && teams.away && teams.home) {
-      if (introEl) {
-        introEl.textContent = `Loading real rosters for ${teams.away} and ${teams.home}…`;
-      }
-
-      try {
-        const [awayRoster, homeRoster] = await Promise.all([
-          fetchRosterByAbbr(teams.away),
-          fetchRosterByAbbr(teams.home),
-        ]);
-
-        const combined = []
-          .concat(Array.isArray(awayRoster) ? awayRoster : [])
-          .concat(Array.isArray(homeRoster) ? homeRoster : [])
-          .map(normalizeRosterPlayer)
-          .filter((p) => p && p.bdlId);
-
-        if (combined.length) {
-          if (introEl) {
-            introEl.textContent = `Players for ${teams.away} and ${teams.home} in ${gameLabel}.`;
-          }
-          combined.forEach((player) => appendPlayerPill(gridEl, player));
-          return;
-        }
-      } catch (err) {
-        console.error("Roster render failed; falling back to demo.", err);
-      }
-    }
-
-    // Demo fallback (your current behavior)
-    let playersForMatchup = DEMO_PLAYERS;
-
-    if (teams) {
-      const filtered = DEMO_PLAYERS.filter(
-        (p) => p.team === teams.away || p.team === teams.home
-      );
-      if (filtered.length > 0) playersForMatchup = filtered;
-    }
-
-    if (introEl) {
-      introEl.textContent =
-        teams
-          ? `Demo key players for ${teams.away} and ${teams.home} in ${gameLabel}.`
-          : `Demo key players for ${gameLabel || "this matchup"}.`;
-    }
-
-    playersForMatchup.forEach((player) => appendPlayerPill(gridEl, player));
   }
 
   function appendPlayerPill(gridEl, player) {
@@ -478,6 +447,80 @@
     });
 
     gridEl.appendChild(btn);
+  }
+
+  async function renderPlayersForMatchup(gameCtx) {
+    const introEl = document.getElementById("players-list-intro");
+    const gridEl = document.getElementById("players-list-grid");
+    if (!gridEl) return;
+
+    gridEl.innerHTML = "";
+
+    const label = typeof gameCtx === "string" ? gameCtx : (gameCtx && gameCtx.label) ? gameCtx.label : "";
+    const awayRef = gameCtx && typeof gameCtx === "object" ? gameCtx.away : null;
+    const homeRef = gameCtx && typeof gameCtx === "object" ? gameCtx.home : null;
+
+    // Prefer structured teams; fallback to parsing label.
+    let teams = null;
+    if (awayRef && homeRef) {
+      teams = {
+        away: String(awayRef.abbr || "").toUpperCase().slice(0, 3),
+        home: String(homeRef.abbr || "").toUpperCase().slice(0, 3),
+      };
+    } else {
+      teams = extractTeamsFromLabel(label);
+    }
+
+    // Try real rosters
+    if (awayRef || homeRef || teams) {
+      if (introEl) {
+        introEl.textContent = `Loading real rosters${teams ? ` for ${teams.away} and ${teams.home}` : ""}…`;
+      }
+
+      try {
+        const [awayRoster, homeRoster] = await Promise.all([
+          fetchRosterByTeamRef(awayRef || (teams ? { abbr: teams.away } : null)),
+          fetchRosterByTeamRef(homeRef || (teams ? { abbr: teams.home } : null)),
+        ]);
+
+        const combined = []
+          .concat(Array.isArray(awayRoster) ? awayRoster : [])
+          .concat(Array.isArray(homeRoster) ? homeRoster : [])
+          .map(normalizeRosterPlayer)
+          .filter((p) => p && p.bdlId);
+
+        if (combined.length) {
+          if (introEl) {
+            introEl.textContent = teams
+              ? `Players for ${teams.away} and ${teams.home} in ${label || "this matchup"}.`
+              : `Players for this matchup.`;
+          }
+          combined.forEach((player) => appendPlayerPill(gridEl, player));
+          return;
+        }
+      } catch (err) {
+        console.error("Roster render failed; falling back to demo.", err);
+      }
+    }
+
+    // Demo fallback
+    let playersForMatchup = DEMO_PLAYERS;
+
+    if (teams) {
+      const filtered = DEMO_PLAYERS.filter(
+        (p) => p.team === teams.away || p.team === teams.home
+      );
+      if (filtered.length > 0) playersForMatchup = filtered;
+    }
+
+    if (introEl) {
+      introEl.textContent =
+        teams
+          ? `Demo key players for ${teams.away} and ${teams.home} in ${label || "this matchup"}.`
+          : `Demo key players for ${label || "this matchup"}.`;
+    }
+
+    playersForMatchup.forEach((player) => appendPlayerPill(gridEl, player));
   }
 
   function currentTabLabelShort() {
@@ -604,11 +647,12 @@
     slipList.appendChild(li);
   }
 
-  function openPlayersForGame(gameLabel) {
+  function openPlayersForGame(gameCtx) {
     switchToPlayersView();
 
-    const gameCtx = document.getElementById("players-game-context");
-    if (gameCtx) gameCtx.textContent = gameLabel || "Game selected.";
+    const label = typeof gameCtx === "string" ? gameCtx : (gameCtx && gameCtx.label) ? gameCtx.label : "Game selected.";
+    const gameCtxEl = document.getElementById("players-game-context");
+    if (gameCtxEl) gameCtxEl.textContent = label;
 
     currentPlayer = null;
 
@@ -626,9 +670,7 @@
     updateTabActiveClasses();
 
     renderChartPlaceholders();
-
-    // UPDATED: now attempts roster pull, falls back to demo.
-    renderPlayersForMatchup(gameLabel);
+    renderPlayersForMatchup(gameCtx);
   }
 
   // ---------------------------
@@ -645,16 +687,12 @@
     return document.getElementById("player-main-scroll");
   }
 
-  // Single-scrollbar UX:
-  // - Spark row does NOT have its own horizontal scrollbar
-  // - But horizontal scrolling while hovering the spark row will scroll the main chart
   function bindSparkWheelToMainChart() {
     const sparks = document.getElementById("player-sparklines");
     if (!sparks) return;
     if (sparks.dataset.wheelBound === "true") return;
     sparks.dataset.wheelBound = "true";
 
-    // Never allow the sparks row to show a horizontal scrollbar
     sparks.style.overflowX = "hidden";
     sparks.style.overflowY = "visible";
 
@@ -664,7 +702,6 @@
         const scroller = getMainScroller();
         if (!scroller) return;
 
-        // Trackpads provide deltaX; mouse wheels often need Shift+wheel for horizontal.
         const dx = Math.abs(e.deltaX) > 0 ? e.deltaX : (e.shiftKey ? e.deltaY : 0);
         if (!dx) return;
 
@@ -904,13 +941,11 @@
     const statLabel = statLabelFromKey(primaryStatKey);
     const tabLabel = currentTabLabelShort();
 
-    // Compute a “wide enough” SVG so horizontal scroll is meaningful
     const rect = main.getBoundingClientRect ? main.getBoundingClientRect() : null;
     const baseW = rect && rect.width ? Math.max(520, Math.floor(rect.width)) : 640;
     const pointsW = 28 * Math.max(10, mainVals.length);
     const svgW = Math.max(baseW, pointsW);
 
-    // Footer is OUTSIDE scroll region (prevents cutoff/misalignment).
     main.innerHTML = `
       <div class="pp-chart-head" style="display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:8px;">
         <div style="font-size:.82rem; letter-spacing:.12em; text-transform:uppercase; opacity:.88;">
@@ -932,13 +967,9 @@
       </div>
     `;
 
-    // Re-bind wheel proxy (safe/no-op if already bound)
     bindSparkWheelToMainChart();
   }
 
-  // ---------------------------
-  // Boot
-  // ---------------------------
   document.addEventListener("DOMContentLoaded", initPlayerViewPlaceholders);
 
   window.PropsParlor = window.PropsParlor || {};
