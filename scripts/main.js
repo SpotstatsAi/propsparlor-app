@@ -1,47 +1,67 @@
 // scripts/main.js
-// Handles left-nav view switching and kicks off the "Today's Games" loader.
+// PropsParlor – view router + module bootstraps
+// Ensures Today’s Games initializes when its panel is activated.
 
 (function () {
-  function initNav() {
-    const navItems = document.querySelectorAll(".nav-item[data-view]");
-    const views = document.querySelectorAll(".view[data-view-panel]");
+  function $all(sel) {
+    return Array.from(document.querySelectorAll(sel));
+  }
 
-    if (!navItems.length || !views.length) return;
-
-    function activate(viewName) {
-      navItems.forEach((btn) => {
-        const isActive = btn.getAttribute("data-view") === viewName;
-        btn.classList.toggle("nav-item-active", isActive);
-      });
-
-      views.forEach((panel) => {
-        const isActive = panel.getAttribute("data-view-panel") === viewName;
-        panel.classList.toggle("view-active", isActive);
-      });
-    }
-
-    navItems.forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const viewName = btn.getAttribute("data-view");
-        if (!viewName) return;
-        activate(viewName);
-      });
+  function setActiveView(viewName) {
+    // Toggle view panels
+    $all(".view").forEach((view) => {
+      const panelName = view.getAttribute("data-view-panel");
+      view.classList.toggle("view-active", panelName === viewName);
     });
 
-    // Respect whatever is pre-marked as active, fallback to "overview".
-    const currentActive = document.querySelector(".nav-item.nav-item-active");
-    const initialView =
-      (currentActive && currentActive.getAttribute("data-view")) || "overview";
+    // Toggle nav active state
+    $all(".nav-item").forEach((btn) => {
+      const target = btn.getAttribute("data-view");
+      btn.classList.toggle("nav-item-active", target === viewName);
+    });
 
-    activate(initialView);
+    // Call per-view initializers (idempotent patterns)
+    if (viewName === "games") {
+      if (typeof window.initGamesToday === "function") {
+        window.initGamesToday();
+      } else {
+        console.error("initGamesToday() is not available. Check scripts load order.");
+      }
+    }
+
+    if (viewName === "players") {
+      // Players view boot is handled inside players-ui.js via DOMContentLoaded,
+      // but we keep this hook for future expansions.
+      if (window.PropsParlor && typeof window.PropsParlor.openPlayersForGame === "function") {
+        // no-op
+      }
+    }
+  }
+
+  function bindNav() {
+    $all(".nav-item").forEach((btn) => {
+      if (btn.dataset.bound === "true") return;
+      btn.dataset.bound = "true";
+
+      btn.addEventListener("click", () => {
+        const target = btn.getAttribute("data-view");
+        if (!target) return;
+        setActiveView(target);
+      });
+    });
   }
 
   document.addEventListener("DOMContentLoaded", () => {
-    initNav();
+    bindNav();
 
-    // If the games UI helper is present, initialize it once on load.
-    if (typeof window.initGamesToday === "function") {
-      window.initGamesToday();
-    }
+    // Boot the default active view (if one is already active in markup),
+    // otherwise default to "overview".
+    const activeBtn = document.querySelector(".nav-item.nav-item-active");
+    const initial = activeBtn?.getAttribute("data-view") || "overview";
+    setActiveView(initial);
   });
+
+  // Expose for debugging
+  window.PropsParlor = window.PropsParlor || {};
+  window.PropsParlor.setActiveView = setActiveView;
 })();
