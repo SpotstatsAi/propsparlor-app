@@ -1,8 +1,4 @@
 // functions/api/stats/games-today.js
-// Route: GET /api/stats/games-today
-//
-// Calls BDL: GET https://api.balldontlie.io/v1/games?dates[]=YYYY-MM-DD&per_page=100
-// Uses KV: PROPSPARLOR_BDL_CACHE
 
 const BASE_URL = "https://api.balldontlie.io";
 
@@ -17,12 +13,14 @@ export async function onRequest(context) {
   // KV → try cache first
   try {
     const cached = await env.PROPSPARLOR_BDL_CACHE.get(cacheKey);
+
     if (cached) {
       try {
         const obj = JSON.parse(cached);
         if (obj && typeof obj === "object") {
           obj.cache_source = "kv";
-          return new Response(JSON.stringify(obj, null, 2), {
+          const payload = JSON.stringify(obj, null, 2);
+          return new Response(payload, {
             status: 200,
             headers: {
               "Content-Type": "application/json",
@@ -31,7 +29,7 @@ export async function onRequest(context) {
           });
         }
       } catch {
-        // If parsing fails, return raw cached string
+        // parsing failed, just return raw
       }
 
       return new Response(cached, {
@@ -48,17 +46,13 @@ export async function onRequest(context) {
 
   // KV miss → call BDL
   try {
-    // Per BDL docs:
-    // GET /v1/games supports dates[] array: ?dates[]=YYYY-MM-DD :contentReference[oaicite:4]{index=4}
-    const url = new URL("/v1/games", BASE_URL);
-    url.searchParams.append("dates[]", today);
+    const url = new URL("/nba/v1/games", BASE_URL);
+    url.searchParams.set("dates[]", today);
     url.searchParams.set("per_page", "100");
 
     const response = await fetch(url.toString(), {
       method: "GET",
       headers: {
-        Accept: "application/json",
-        // BDL docs use Authorization: YOUR_API_KEY (no Bearer) :contentReference[oaicite:5]{index=5}
         Authorization: env.BDL_API_KEY,
       },
     });
@@ -119,7 +113,7 @@ export async function onRequest(context) {
 
     try {
       await env.PROPSPARLOR_BDL_CACHE.put(cacheKey, payload, {
-        expirationTtl: 600, // 10 min
+        expirationTtl: 600,
       });
     } catch (err) {
       console.error("KV put error (games-today):", err);
