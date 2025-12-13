@@ -200,59 +200,12 @@
       const rowKey = valEl ? valEl.dataset.statKey : null;
       row.classList.toggle("player-stat-row-active", rowKey === primaryStatKey);
     });
-  function avg(nums) {
-    if (!nums || !nums.length) return null;
-    const s = nums.reduce((a, b) => a + b, 0);
-    return s / nums.length;
-  }
 
-  function getLineFromGamelogForKey(statKey) {
-    if (!currentPlayer || !currentPlayer.bdlId) return null;
+    syncAddSlipButtonDisabled();
 
-    const rows = gamelogCache[String(currentPlayer.bdlId)];
-    if (!Array.isArray(rows) || rows.length < 2) return null;
-
-    const windowN = windowSizeForTab(currentTab);
-    const sliced = rows.slice(0, Math.max(windowN, 5)); // same logic as charts
-    const vals = seriesForKey(sliced, statKey);
-    const a = avg(vals);
-    return Number.isFinite(a) ? a : null;
-  }
-
-  function hasGamelogForCurrentPlayer() {
-    if (!currentPlayer || !currentPlayer.bdlId) return false;
-    const rows = gamelogCache[String(currentPlayer.bdlId)];
-    return Array.isArray(rows) && rows.length >= 2;
-  }
-    
-  function syncAddSlipButtonDisabled() {
-    const btn = document.getElementById("player-add-slip");
-    if (!btn) return;
-
-    if (!currentPlayer) {
-      btn.disabled = true;
-      btn.textContent = "Add to Slip (Disabled · No Player)";
-      return;
+    if (currentPlayer && currentPlayer.bdlId) {
+      renderChartsForCurrentPlayer().catch(() => {});
     }
-
-    // First try DOM stats (season/L10/L5 averages)
-    const stats = readStatsFromDom();
-    const hasAnyNumeric =
-      stats.pts !== null ||
-      stats.reb !== null ||
-      stats.ast !== null ||
-      stats.pra !== null ||
-      stats.fg3m !== null;
-
-    // If averages didn't load, allow slip when gamelog exists (charts prove this path)
-    if (!hasAnyNumeric && !hasGamelogForCurrentPlayer()) {
-      btn.disabled = true;
-      btn.textContent = "Add to Slip (Disabled · No Stats)";
-      return;
-    }
-
-    btn.disabled = false;
-    btn.textContent = "Add to Slip";
   }
 
   function subtitleForTab(tab, player, isLoading) {
@@ -633,6 +586,7 @@
     if (btn && btn.disabled) return;
 
     const stats = readStatsFromDom();
+
     const tabLabel = currentTabLabelShort();
 
     const statKeysInOrder = [primaryStatKey, "pra", "pts", "reb", "ast", "fg3m"]
@@ -640,28 +594,19 @@
 
     let chosenKey = null;
     let chosenValue = null;
-
-    // Prefer DOM (averages). If missing, fall back to gamelog-derived line.
     for (const key of statKeysInOrder) {
-      const domVal = stats[key];
-      if (Number.isFinite(domVal)) {
+      if (stats[key] !== null && stats[key] !== undefined) {
         chosenKey = key;
-        chosenValue = domVal;
-        break;
-      }
-
-      const glVal = getLineFromGamelogForKey(key);
-      if (Number.isFinite(glVal)) {
-        chosenKey = key;
-        chosenValue = glVal;
+        chosenValue = stats[key];
         break;
       }
     }
-
     if (!chosenKey || !Number.isFinite(chosenValue)) return;
 
     const statLabel = statLabelFromKey(chosenKey);
 
+    // Thread 8: internal pick representation (memory-only)
+    // Default side = OVER for now. Line = derived from current stat value.
     const pick = {
       player_id: currentPlayer.bdlId,
       player_name: currentPlayer.name,
@@ -673,37 +618,14 @@
       side: "OVER",
     };
 
+    // Preferred path: use the Slip store if present
     if (window.PropsParlor && window.PropsParlor.Slip && typeof window.PropsParlor.Slip.addPick === "function") {
       window.PropsParlor.Slip.addPick(pick);
       return;
     }
 
-    // If slip.js isn't loaded yet, keep your previous UI append behavior as a fallback
-    const slipList = document.querySelector(".slip-list");
-    if (!slipList) return;
-
-    const placeholder = slipList.querySelector(".slip-placeholder-row");
-    if (placeholder) placeholder.remove();
-
-    const li = document.createElement("li");
-    li.className = "slip-row";
-
-    const header = document.createElement("div");
-    header.className = "slip-row-header";
-
-    const titleEl = document.createElement("span");
-    titleEl.className = "slip-row-title";
-    titleEl.textContent = `${currentPlayer.name} · ${tabLabel} ${statLabel} ${chosenValue.toFixed(1)}`;
-
-    const tagEl = document.createElement("span");
-    tagEl.className = "slip-row-tag";
-    tagEl.textContent = `${currentPlayer.team} · ${tabLabel} · OVER`;
-
-    header.appendChild(titleEl);
-    header.appendChild(tagEl);
-
-    li.appendChild(header);
-    slipList.appendChild(li);
+    // Fallback: if slip store isn't loaded, do nothing (avoid desync hacks)
+    console.error("Slip store not available. Ensure scripts/slip.js is loaded before players-ui.js.");
   }
 
 
