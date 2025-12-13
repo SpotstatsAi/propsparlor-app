@@ -4,6 +4,8 @@ const BASE_URL = "https://api.balldontlie.io";
 
 /**
  * GET /api/stats/season?player_id=237&season=2024
+ * GET /api/stats/season?player_id=237               (defaults to env.NBA_CURRENT_SEASON)
+ * GET /api/stats/season?player_id=237&season=all    (explicit all seasons)
  *
  * - Pulls all game logs for the player/season from BDL /v1/stats
  * - Computes season averages
@@ -16,10 +18,9 @@ export async function onRequest(context) {
   const url = new URL(request.url);
 
   const playerIdParam = url.searchParams.get("player_id");
-  const seasonParam = url.searchParams.get("season"); // optional, can be null
+  const seasonParamRaw = url.searchParams.get("season"); // optional
 
   const playerId = playerIdParam ? parseInt(playerIdParam, 10) : null;
-  const season = seasonParam ? parseInt(seasonParam, 10) : null;
 
   if (!playerId || Number.isNaN(playerId)) {
     return jsonResponse(
@@ -34,10 +35,63 @@ export async function onRequest(context) {
     );
   }
 
-  // Build cache key (season can be null → use "all")
+  // ---- Season selection (error-proof, no guessing) ----
+  // Supported:
+  // - season=YYYY (number)
+  // - season=all  (explicit all seasons)
+  // - season omitted -> env.NBA_CURRENT_SEASON must exist
+  const seasonParam = seasonParamRaw ? String(seasonParamRaw).trim().toLowerCase() : null;
+
+  let effectiveSeason = null;        // number | null
+  let seasonMode = "season";         // "season" | "all"
+  let seasonSource = "query";        // "query" | "env" | "query:all"
+
+  if (seasonParam === "all") {
+    seasonMode = "all";
+    seasonSource = "query:all";
+    effectiveSeason = null;
+  } else if (seasonParam) {
+    const parsed = parseInt(seasonParam, 10);
+    if (!parsed || Number.isNaN(parsed)) {
+      return jsonResponse(
+        {
+          ok: false,
+          error: {
+            source: "worker",
+            message: "Invalid season. Use a year like 2024 or season=all.",
+          },
+        },
+        400
+      );
+    }
+    effectiveSeason = parsed;
+  } else {
+    // No season param -> require env.NBA_CURRENT_SEASON (deterministic truth)
+    const envSeasonRaw = env.NBA_CURRENT_SEASON;
+    const envSeason = envSeasonRaw ? parseInt(String(envSeasonRaw), 10) : null;
+
+    if (!envSeason || Number.isNaN(envSeason)) {
+      return jsonResponse(
+        {
+          ok: false,
+          error: {
+            source: "worker",
+            message:
+              "No season provided and env.NBA_CURRENT_SEASON is not set. Set NBA_CURRENT_SEASON in Cloudflare env vars or pass ?season=YYYY or ?season=all.",
+          },
+        },
+        400
+      );
+    }
+
+    effectiveSeason = envSeason;
+    seasonSource = "env";
+  }
+
+  // Build cache key (explicitly includes mode + season)
   // IMPORTANT: version-bump cache key to bypass any poisoned KV entries
-  const seasonKey = season ? String(season) : "all";
-  const cacheKey = `stats-season:v2:${playerId}:${seasonKey}`;
+  const seasonKey = seasonMode === "all" ? "all" : String(effectiveSeason);
+  const cacheKey = `stats-season:v3:${playerId}:${seasonKey}`;
 
   // 1) Try KV cache first
   try {
@@ -62,7 +116,7 @@ export async function onRequest(context) {
 
   // 2) Cache miss → fetch all stats pages from BDL
   try {
-    const allStats = await fetchAllStatsFromBDL(env.BDL_API_KEY, playerId, season);
+    const allStats = await fetchAllStatsFromBDL(env.BDL_API_KEY, playerId, seasonMode === "all" ? null : effectiveSeason);
 
     // Sort by game date ascending so last5/last10 are easy to slice
     allStats.sort((a, b) => {
@@ -81,25 +135,29 @@ export async function onRequest(context) {
     const payloadObj = {
       ok: true,
       player_id: playerId,
-      season: season || null,
+
+      // Clarify exactly what season logic was used:
+      season_mode: seasonMode,                        // "season" or "all"
+      season: seasonMode === "all" ? null : effectiveSeason,
+      season_source: seasonSource,                    // "query" | "env" | "query:all"
+
       games_count: allStats.length,
       season_averages: seasonAvgs,
       last5_averages: last5Avgs,
       last10_averages: last10Avgs,
-      game_logs: allStats, // full raw logs so frontend can still drill down
+      game_logs: allStats,
       cache_source: "live",
     };
 
     const payload = JSON.stringify(payloadObj, null, 2);
 
-    // 3) Store in KV with ~12 hour TTL (daily/overnight refresh)
+    // 3) Store in KV with ~12 hour TTL
     try {
       await env.PROPSPARLOR_BDL_CACHE.put(cacheKey, payload, {
         expirationTtl: 60 * 60 * 12, // 12 hours
       });
     } catch (err) {
       console.error("KV put error (stats-season):", err);
-      // still return fresh data
     }
 
     return jsonResponseRaw(payload, 200);
@@ -175,10 +233,6 @@ async function fetchAllStatsFromBDL(apiKey, playerId, season) {
   return allStats;
 }
 
-/**
- * Compute per-game averages (season, last5, last10).
- * All averages are rounded to 1 decimal place.
- */
 function computeAverages(stats) {
   const count = stats.length;
   if (!count) {
@@ -253,12 +307,9 @@ function computeAverages(stats) {
   const avgFtm = totalFtm / games;
   const avgSeconds = totalSeconds / games;
 
-  const fgPct =
-    totalFga > 0 ? round1((totalFgm / totalFga) * 100.0) : null;
-  const fg3Pct =
-    totalFg3a > 0 ? round1((totalFg3m / totalFg3a) * 100.0) : null;
-  const ftPct =
-    totalFta > 0 ? round1((totalFtm / totalFta) * 100.0) : null;
+  const fgPct = totalFga > 0 ? round1((totalFgm / totalFga) * 100.0) : null;
+  const fg3Pct = totalFg3a > 0 ? round1((totalFg3m / totalFg3a) * 100.0) : null;
+  const ftPct = totalFta > 0 ? round1((totalFtm / totalFta) * 100.0) : null;
 
   return {
     games,
@@ -293,10 +344,6 @@ function round1(value) {
   return Math.round(value * 10) / 10;
 }
 
-/**
- * Convert "MM:SS" or "M:SS" to seconds.
- * If format is weird or missing, return 0.
- */
 function parseMinutesToSeconds(minStr) {
   if (!minStr || typeof minStr !== "string") return 0;
 
@@ -311,10 +358,6 @@ function parseMinutesToSeconds(minStr) {
   return minutes * 60 + seconds;
 }
 
-/**
- * Convert seconds to "MM.S" style string (1 decimal minute),
- * e.g. 32.5 means about 32.5 minutes.
- */
 function secondsToMinutesString(seconds) {
   if (!Number.isFinite(seconds) || seconds <= 0) return "0.0";
   const minutes = seconds / 60;
