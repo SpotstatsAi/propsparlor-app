@@ -1560,3 +1560,152 @@ button {
   margin-top: 8px;
   padding-bottom: 8px;
 }
+
+/* =========================================================
+   Thread 8 – Pick card polish (clean, pro, Outlier-ish)
+   CSS-only: improves slip-row layout + typography + controls
+   ========================================================= */
+
+/* Pick cards: consistent padding, subtle border, better depth */
+.slip-row {
+  padding: 12px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(
+    145deg,
+    rgba(18, 26, 68, 0.55),
+    rgba(4, 4, 18, 0.95)
+  );
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.03),
+    0 10px 22px rgba(0, 0, 0, 0.55);
+}
+
+/* Header: lock title left, tag right */
+.slip-row-header {
+  display: grid !important;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+/* Title: stronger, cleaner */
+.slip-row-title {
+  font-size: 0.9rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  line-height: 1.15;
+  opacity: 0.98;
+  overflow-wrap: anywhere;
+}
+
+/* Tag: compact “chip” */
+.slip-row-tag {
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 255, 180, 0.28);
+  background: rgba(0, 20, 20, 0.45);
+  box-shadow: 0 0 12px rgba(0, 255, 180, 0.06);
+}
+
+/* Subtext: clean secondary line */
+.slip-row-sub {
+  font-size: 0.76rem;
+  line-height: 1.35;
+  opacity: 0.82;
+  margin-bottom: 10px;
+}
+
+/* Controls row (whatever slip.js appends): make it look like a proper action bar */
+.slip-row > div:last-child {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+
+  padding-top: 10px;
+  margin-top: 10px;
+
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Numeric input “line” field looks like a pro pill */
+.slip-row input[type="number"] {
+  width: 92px;
+  height: 34px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.24);
+  color: rgba(245, 245, 255, 0.92);
+  outline: none;
+}
+
+.slip-row input[type="number"]:focus {
+  border-color: rgba(0, 255, 180, 0.45);
+  box-shadow: 0 0 0 3px rgba(0, 255, 180, 0.10);
+}
+
+/* Any buttons inside a slip row (Remove, etc.) get a consistent style */
+.slip-row button {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(0, 0, 0, 0.18);
+  color: rgba(245, 245, 255, 0.9);
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+
+  transition:
+    transform 0.08s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.slip-row button:hover {
+  border-color: rgba(0, 255, 180, 0.35);
+  box-shadow: 0 0 14px rgba(0, 255, 180, 0.10);
+  transform: translateY(-0.5px);
+}
+
+.slip-row button:active {
+  transform: translateY(0.5px) scale(0.99);
+}
+
+/* If the remove button is a plain "Remove" (common), give it a slightly different danger tint */
+.slip-row button[aria-label*="Remove" i],
+.slip-row button.remove,
+.slip-row button:where(:not([id])):where(:not(.player-pill)):where(:not(.nav-item)):where(:not(.games-table-cta)):where(:not(.link-button)) {
+  /* no hard assumptions; these remain safe defaults */
+}
+
+/* List spacing: consistent, premium */
+.slip-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Placeholder row matches the new card aesthetic */
+.slip-placeholder-row {
+  border-radius: 14px;
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  background: radial-gradient(circle at top left, rgba(18, 26, 68, 0.45), rgba(4, 4, 18, 0.92));
+}
+
+/* Mobile: tighter card padding so it doesn’t feel chunky */
+@media (max-width: 960px) {
+  .slip-row {
+    padding: 11px 11px;
+  }
+}
