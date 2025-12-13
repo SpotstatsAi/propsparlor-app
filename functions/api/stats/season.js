@@ -3,14 +3,16 @@
 const BASE_URL = "https://api.balldontlie.io";
 
 /**
- * GET /api/stats/season?player_id=237&season=2024
- * GET /api/stats/season?player_id=237               (defaults to env.NBA_CURRENT_SEASON)
- * GET /api/stats/season?player_id=237&season=all    (explicit all seasons)
+ * GET /api/stats/season?player_id=237&season=2025
  *
  * - Pulls all game logs for the player/season from BDL /v1/stats
  * - Computes season averages
  * - Computes last 5 & last 10 game averages
  * - Caches results in KV for ~12 hours
+ *
+ * IMPORTANT:
+ * - If season is omitted, we default to the current NBA season start year.
+ *   (Oct–Dec => current year, Jan–Sep => previous year)
  */
 
 export async function onRequest(context) {
@@ -18,9 +20,10 @@ export async function onRequest(context) {
   const url = new URL(request.url);
 
   const playerIdParam = url.searchParams.get("player_id");
-  const seasonParamRaw = url.searchParams.get("season"); // optional
+  const seasonParam = url.searchParams.get("season"); // optional
 
   const playerId = playerIdParam ? parseInt(playerIdParam, 10) : null;
+  const seasonExplicit = seasonParam ? parseInt(seasonParam, 10) : null;
 
   if (!playerId || Number.isNaN(playerId)) {
     return jsonResponse(
@@ -35,63 +38,14 @@ export async function onRequest(context) {
     );
   }
 
-  // ---- Season selection (error-proof, no guessing) ----
-  // Supported:
-  // - season=YYYY (number)
-  // - season=all  (explicit all seasons)
-  // - season omitted -> env.NBA_CURRENT_SEASON must exist
-  const seasonParam = seasonParamRaw ? String(seasonParamRaw).trim().toLowerCase() : null;
+  // Default to current season if not provided
+  const resolvedSeason =
+    seasonExplicit && !Number.isNaN(seasonExplicit)
+      ? seasonExplicit
+      : inferCurrentSeasonStartYear(new Date());
 
-  let effectiveSeason = null;        // number | null
-  let seasonMode = "season";         // "season" | "all"
-  let seasonSource = "query";        // "query" | "env" | "query:all"
-
-  if (seasonParam === "all") {
-    seasonMode = "all";
-    seasonSource = "query:all";
-    effectiveSeason = null;
-  } else if (seasonParam) {
-    const parsed = parseInt(seasonParam, 10);
-    if (!parsed || Number.isNaN(parsed)) {
-      return jsonResponse(
-        {
-          ok: false,
-          error: {
-            source: "worker",
-            message: "Invalid season. Use a year like 2024 or season=all.",
-          },
-        },
-        400
-      );
-    }
-    effectiveSeason = parsed;
-  } else {
-    // No season param -> require env.NBA_CURRENT_SEASON (deterministic truth)
-    const envSeasonRaw = env.NBA_CURRENT_SEASON;
-    const envSeason = envSeasonRaw ? parseInt(String(envSeasonRaw), 10) : null;
-
-    if (!envSeason || Number.isNaN(envSeason)) {
-      return jsonResponse(
-        {
-          ok: false,
-          error: {
-            source: "worker",
-            message:
-              "No season provided and env.NBA_CURRENT_SEASON is not set. Set NBA_CURRENT_SEASON in Cloudflare env vars or pass ?season=YYYY or ?season=all.",
-          },
-        },
-        400
-      );
-    }
-
-    effectiveSeason = envSeason;
-    seasonSource = "env";
-  }
-
-  // Build cache key (explicitly includes mode + season)
-  // IMPORTANT: version-bump cache key to bypass any poisoned KV entries
-  const seasonKey = seasonMode === "all" ? "all" : String(effectiveSeason);
-  const cacheKey = `stats-season:v3:${playerId}:${seasonKey}`;
+  // Version-bump cache key to avoid poisoned KV entries
+  const cacheKey = `stats-season:v3:${playerId}:${String(resolvedSeason)}`;
 
   // 1) Try KV cache first
   try {
@@ -116,7 +70,11 @@ export async function onRequest(context) {
 
   // 2) Cache miss → fetch all stats pages from BDL
   try {
-    const allStats = await fetchAllStatsFromBDL(env.BDL_API_KEY, playerId, seasonMode === "all" ? null : effectiveSeason);
+    const allStats = await fetchAllStatsFromBDL(
+      env.BDL_API_KEY,
+      playerId,
+      resolvedSeason
+    );
 
     // Sort by game date ascending so last5/last10 are easy to slice
     allStats.sort((a, b) => {
@@ -135,17 +93,12 @@ export async function onRequest(context) {
     const payloadObj = {
       ok: true,
       player_id: playerId,
-
-      // Clarify exactly what season logic was used:
-      season_mode: seasonMode,                        // "season" or "all"
-      season: seasonMode === "all" ? null : effectiveSeason,
-      season_source: seasonSource,                    // "query" | "env" | "query:all"
-
+      season: resolvedSeason,
       games_count: allStats.length,
       season_averages: seasonAvgs,
       last5_averages: last5Avgs,
       last10_averages: last10Avgs,
-      game_logs: allStats,
+      game_logs: allStats, // full raw logs so frontend can still drill down
       cache_source: "live",
     };
 
@@ -158,6 +111,7 @@ export async function onRequest(context) {
       });
     } catch (err) {
       console.error("KV put error (stats-season):", err);
+      // still return fresh data
     }
 
     return jsonResponseRaw(payload, 200);
@@ -178,7 +132,17 @@ export async function onRequest(context) {
 }
 
 /**
- * Fetch all stats pages from BDL for a given player (and optional season)
+ * NBA season “start year” convention.
+ * Oct–Dec => current year; Jan–Sep => previous year.
+ */
+function inferCurrentSeasonStartYear(d) {
+  const year = d.getFullYear();
+  const month = d.getMonth() + 1; // 1-12
+  return month >= 10 ? year : year - 1;
+}
+
+/**
+ * Fetch all stats pages from BDL for a given player+season
  * using the /v1/stats endpoint with cursor-based pagination.
  */
 async function fetchAllStatsFromBDL(apiKey, playerId, season) {
@@ -196,9 +160,10 @@ async function fetchAllStatsFromBDL(apiKey, playerId, season) {
     const url = new URL("/v1/stats", BASE_URL);
     url.searchParams.set("per_page", "100");
     url.searchParams.set("player_ids[]", String(playerId));
-    if (season) {
-      url.searchParams.set("seasons[]", String(season));
-    }
+
+    // Always force a single season (resolvedSeason)
+    url.searchParams.set("seasons[]", String(season));
+
     if (cursor) {
       url.searchParams.set("cursor", String(cursor));
     }
@@ -233,6 +198,10 @@ async function fetchAllStatsFromBDL(apiKey, playerId, season) {
   return allStats;
 }
 
+/**
+ * Compute per-game averages (season, last5, last10).
+ * All averages are rounded to 1 decimal place.
+ */
 function computeAverages(stats) {
   const count = stats.length;
   if (!count) {
@@ -307,9 +276,12 @@ function computeAverages(stats) {
   const avgFtm = totalFtm / games;
   const avgSeconds = totalSeconds / games;
 
-  const fgPct = totalFga > 0 ? round1((totalFgm / totalFga) * 100.0) : null;
-  const fg3Pct = totalFg3a > 0 ? round1((totalFg3m / totalFg3a) * 100.0) : null;
-  const ftPct = totalFta > 0 ? round1((totalFtm / totalFta) * 100.0) : null;
+  const fgPct =
+    totalFga > 0 ? round1((totalFgm / totalFga) * 100.0) : null;
+  const fg3Pct =
+    totalFg3a > 0 ? round1((totalFg3m / totalFg3a) * 100.0) : null;
+  const ftPct =
+    totalFta > 0 ? round1((totalFtm / totalFta) * 100.0) : null;
 
   return {
     games,
@@ -344,6 +316,9 @@ function round1(value) {
   return Math.round(value * 10) / 10;
 }
 
+/**
+ * Convert "MM:SS" or "M:SS" to seconds.
+ */
 function parseMinutesToSeconds(minStr) {
   if (!minStr || typeof minStr !== "string") return 0;
 
@@ -358,6 +333,9 @@ function parseMinutesToSeconds(minStr) {
   return minutes * 60 + seconds;
 }
 
+/**
+ * Convert seconds to "MM.S" minutes string (1 decimal minute).
+ */
 function secondsToMinutesString(seconds) {
   if (!Number.isFinite(seconds) || seconds <= 0) return "0.0";
   const minutes = seconds / 60;
