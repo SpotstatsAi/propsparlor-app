@@ -586,11 +586,6 @@
     if (btn && btn.disabled) return;
 
     const stats = readStatsFromDom();
-    const slipList = document.querySelector(".slip-list");
-    if (!slipList) return;
-
-    const placeholder = slipList.querySelector(".slip-placeholder-row");
-    if (placeholder) placeholder.remove();
 
     const tabLabel = currentTabLabelShort();
 
@@ -606,46 +601,33 @@
         break;
       }
     }
-    if (!chosenKey) return;
+    if (!chosenKey || !Number.isFinite(chosenValue)) return;
 
-    const label = statLabelFromKey(chosenKey);
-    const title = `${currentPlayer.name} · ${tabLabel} ${label}`;
-    const tagText = `${currentPlayer.team} · ${tabLabel}`;
+    const statLabel = statLabelFromKey(chosenKey);
 
-    const li = document.createElement("li");
-    li.className = "slip-row";
+    // Thread 8: internal pick representation (memory-only)
+    // Default side = OVER for now. Line = derived from current stat value.
+    const pick = {
+      player_id: currentPlayer.bdlId,
+      player_name: currentPlayer.name,
+      team: currentPlayer.team,
+      stat_key: chosenKey,
+      stat_label: statLabel,
+      tab: tabLabel,
+      line: chosenValue,
+      side: "OVER",
+    };
 
-    const header = document.createElement("div");
-    header.className = "slip-row-header";
+    // Preferred path: use the Slip store if present
+    if (window.PropsParlor && window.PropsParlor.Slip && typeof window.PropsParlor.Slip.addPick === "function") {
+      window.PropsParlor.Slip.addPick(pick);
+      return;
+    }
 
-    const titleEl = document.createElement("span");
-    titleEl.className = "slip-row-title";
-    titleEl.textContent = `${title} ${chosenValue.toFixed(1)}`;
-
-    const tagEl = document.createElement("span");
-    tagEl.className = "slip-row-tag";
-    tagEl.textContent = tagText;
-
-    header.appendChild(titleEl);
-    header.appendChild(tagEl);
-
-    const sub = document.createElement("div");
-    sub.className = "slip-row-sub";
-    sub.textContent =
-      [
-        stats.pts !== null ? `PTS ${stats.pts.toFixed(1)}` : null,
-        stats.reb !== null ? `REB ${stats.reb.toFixed(1)}` : null,
-        stats.ast !== null ? `AST ${stats.ast.toFixed(1)}` : null,
-        stats.pra !== null ? `PRA ${stats.pra.toFixed(1)}` : null,
-        stats.fg3m !== null ? `3PM ${stats.fg3m.toFixed(1)}` : null,
-      ]
-        .filter(Boolean)
-        .join(" · ") || "No numeric stats available";
-
-    li.appendChild(header);
-    li.appendChild(sub);
-    slipList.appendChild(li);
+    // Fallback: if slip store isn't loaded, do nothing (avoid desync hacks)
+    console.error("Slip store not available. Ensure scripts/slip.js is loaded before players-ui.js.");
   }
+
 
   function openPlayersForGame(gameCtx) {
     switchToPlayersView();
