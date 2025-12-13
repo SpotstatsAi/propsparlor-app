@@ -1075,3 +1075,37 @@ button {
   line-height: 1.5;
   opacity: 0.85;
 }
+
+/* ----------------------------
+   Thread 7 – Charts polish
+   Single scrollbar (main chart)
+   ---------------------------- */
+
+/* Spark row stays clean (no horizontal scrollbars / no flex-strip) */
+#player-sparklines{
+  display: grid !important;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+  overflow: hidden !important;
+  padding-bottom: 0 !important;
+}
+
+/* Main chart: only the inner scroller scrolls */
+#player-main-chart{
+  overflow: hidden !important;
+  display: block !important;
+  height: auto !important;
+}
+
+/* Keep the SVG from doing inline baseline weirdness */
+.pp-chart-inner svg{
+  display: block;
+}
+
+/* Responsive spark layout */
+@media (max-width: 1100px) {
+  #player-sparklines { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+}
+@media (max-width: 760px) {
+  #player-sparklines { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+}
