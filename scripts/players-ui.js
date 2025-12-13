@@ -4,8 +4,8 @@
 // selectable primary stat (PTS / REB / AST / PRA / 3PM).
 //
 // Chart upgrade: pulls /api/stats/gamelog and renders SVG sparklines + a main line chart.
-// Scroll upgrade (NEXT): single shared horizontal scroll rail (sparks + main chart together).
-// Result: no scroll-sync jitter/freeze because there is only one scrollbar.
+// Scroll upgrade (polished): single horizontal scrollbar (main chart only).
+// Hovering the spark row and horizontal-scrolling will move the main chart (no jitter/freeze).
 
 (function () {
   const SEASON_API_URL = "/api/stats/season";
@@ -24,8 +24,9 @@
   let currentPlayer = null;
   let currentTab = "season";  // "season" | "last10" | "last5"
   let primaryStatKey = "pra"; // "pts" | "reb" | "ast" | "pra" | "fg3m"
-  const statsCache = Object.create(null);    // key: `${playerId}:${tab}`
-  const gamelogCache = Object.create(null);  // key: `${playerId}` -> array
+
+  const statsCache = Object.create(null);   // key: `${playerId}:${tab}`
+  const gamelogCache = Object.create(null); // key: `${playerId}` -> array
 
   function initPlayerViewPlaceholders() {
     const addSlipBtn = document.getElementById("player-add-slip");
@@ -41,10 +42,10 @@
     wireStatRows();
     updateStatMeters(null);
 
-    // Build the shared chart rail once and keep it stable.
-    ensureChartRail();
-
     renderChartPlaceholders();
+
+    // Single-scrollbar UX: spark-row wheel/trackpad horizontally scrolls the main chart.
+    bindSparkWheelToMainChart();
   }
 
   function switchToPlayersView() {
@@ -174,8 +175,6 @@
   function wireStatRows() {
     const rows = document.querySelectorAll(".player-stat-row");
     rows.forEach((row) => {
-      if (row.dataset.bound === "true") return;
-      row.dataset.bound = "true";
       row.addEventListener("click", () => {
         const valEl = row.querySelector(".player-stat-value");
         const key = valEl ? valEl.dataset.statKey : null;
@@ -552,7 +551,6 @@
     wireStatRows();
     updateTabActiveClasses();
 
-    ensureChartRail();
     renderChartPlaceholders();
     renderDemoPlayers(gameLabel);
   }
@@ -561,120 +559,60 @@
   // Charts (SVG, lightweight)
   // ---------------------------
 
-  function getChartNodes() {
+  function getChartsEls() {
     const sparklines = document.getElementById("player-sparklines");
     const main = document.getElementById("player-main-chart");
     return { sparklines, main };
   }
 
-  // Build a single shared scroll rail by wrapping the two existing containers.
-  function ensureChartRail() {
-    const { sparklines, main } = getChartNodes();
-    if (!sparklines || !main) return;
-
-    // Already upgraded
-    if (main.dataset.railReady === "true") return;
-
-    // Find a common parent to wrap (the chart panel content area).
-    const parent = sparklines.parentElement;
-    if (!parent || parent !== main.parentElement) {
-      // If markup changes later, fail safely without breaking the page.
-      main.dataset.railReady = "true";
-      return;
-    }
-
-    // Build rail DOM
-    const rail = document.createElement("div");
-    rail.className = "chart-rail";
-    rail.id = "player-chart-rail";
-
-    const inner = document.createElement("div");
-    inner.className = "chart-rail-inner";
-
-    // Convert existing nodes into the new roles
-    sparklines.classList.add("sparks-strip");
-    main.classList.add("main-chart-viewport");
-
-    // Remove legacy inline styles that can fight layout
-    sparklines.removeAttribute("style");
-    main.removeAttribute("style");
-
-    // Move them under the rail (keeps IDs intact for JS)
-    parent.insertBefore(rail, sparklines);
-    rail.appendChild(inner);
-    inner.appendChild(sparklines);
-    inner.appendChild(main);
-
-    // Initialize spark row with the new “spark-card” structure
-    renderSparkScaffold();
-
-    main.dataset.railReady = "true";
+  function getMainScroller() {
+    return document.getElementById("player-main-scroll");
   }
 
-  function renderSparkScaffold() {
-    const sparklines = document.getElementById("player-sparklines");
-    if (!sparklines) return;
+  // Single-scrollbar UX:
+  // - Spark row does NOT have its own horizontal scrollbar
+  // - But horizontal scrolling while hovering the spark row will scroll the main chart
+  function bindSparkWheelToMainChart() {
+    const sparks = document.getElementById("player-sparklines");
+    if (!sparks) return;
+    if (sparks.dataset.wheelBound === "true") return;
+    sparks.dataset.wheelBound = "true";
 
-    const keys = [
-      { key: "pts", label: "PTS Spark" },
-      { key: "reb", label: "REB Spark" },
-      { key: "ast", label: "AST Spark" },
-      { key: "pra", label: "PRA Spark" },
-      { key: "fg3m", label: "3PM Spark" },
-    ];
+    sparks.addEventListener(
+      "wheel",
+      (e) => {
+        const scroller = getMainScroller();
+        if (!scroller) return;
 
-    sparklines.innerHTML = "";
+        // Trackpads provide deltaX; mouse wheels often need Shift+wheel for horizontal.
+        const dx = Math.abs(e.deltaX) > 0 ? e.deltaX : (e.shiftKey ? e.deltaY : 0);
+        if (!dx) return;
 
-    keys.forEach((k) => {
-      const card = document.createElement("div");
-      card.className = "spark-card";
-      card.dataset.sparkKey = k.key;
-
-      const label = document.createElement("span");
-      label.className = "status-label";
-      label.textContent = k.label;
-
-      const host = document.createElement("div");
-      host.className = "spark-host";
-      host.dataset.sparkHost = k.key;
-
-      card.appendChild(label);
-      card.appendChild(host);
-      sparklines.appendChild(card);
-    });
+        scroller.scrollLeft += dx;
+        e.preventDefault();
+      },
+      { passive: false }
+    );
   }
 
   function renderChartPlaceholders() {
-    ensureChartRail();
-
-    const main = document.getElementById("player-main-chart");
+    const { main } = getChartsEls();
     if (!main) return;
 
-    // If we haven't built scaffold yet, do it now.
-    const sparklines = document.getElementById("player-sparklines");
-    if (sparklines && (!sparklines.children || sparklines.children.length === 0)) {
-      renderSparkScaffold();
-    }
-
     main.innerHTML =
-      `<div class="main-chart-placeholder">
-        <div class="main-chart-title">Main Trend Chart</div>
-        <div class="main-chart-copy">
-          Select a player to render sparklines + a trend chart inside one shared scroll rail.
-        </div>
-      </div>`;
+      `<div class="panel-text" style="opacity:.75;">Select a player to render charts.</div>`;
   }
 
   function renderChartLoadingState() {
-    ensureChartRail();
-
-    const main = document.getElementById("player-main-chart");
+    const { main } = getChartsEls();
     if (!main) return;
 
     main.innerHTML =
-      `<div class="main-chart-placeholder">
-        <div class="main-chart-title">Loading chart…</div>
-        <div class="main-chart-copy">Pulling game logs for the selected player.</div>
+      `<div style="text-align:center;">
+        <div style="font-size:.82rem; letter-spacing:.12em; text-transform:uppercase; opacity:.85; margin-bottom:6px;">
+          Loading chart…
+        </div>
+        <div class="panel-text" style="opacity:.8;">Pulling game logs for the selected player.</div>
       </div>`;
   }
 
@@ -740,14 +678,27 @@
       .join(" ");
 
     return `
-      <svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" aria-label="sparkline">
+      <svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" aria-label="sparkline" style="display:block;">
         <path d="${d}" fill="none" stroke="rgba(0,255,180,0.85)" stroke-width="2" stroke-linecap="round" />
       </svg>
     `;
   }
 
+  function rollingAverage(values, window) {
+    if (!values || values.length === 0) return [];
+    const w = Math.max(1, window | 0);
+    const out = [];
+    for (let i = 0; i < values.length; i++) {
+      const start = Math.max(0, i - (w - 1));
+      const slice = values.slice(start, i + 1);
+      const avg = slice.reduce((a, b) => a + b, 0) / slice.length;
+      out.push(avg);
+    }
+    return out;
+  }
+
   function buildMainChartSVG(values, opts) {
-    const width = opts?.width || 760;
+    const width = opts?.width || 640;
     const height = opts?.height || 210;
 
     if (!values || values.length < 2) {
@@ -812,7 +763,7 @@
       .join("");
 
     return `
-      <svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" aria-label="trend chart">
+      <svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" aria-label="trend chart" style="display:block;">
         ${grid}
         <text x="8" y="${(padT + 10).toFixed(2)}" fill="rgba(255,255,255,0.70)" font-size="10">${maxLabel}</text>
         <text x="8" y="${(padT + innerH).toFixed(2)}" fill="rgba(255,255,255,0.55)" font-size="10">${minLabel}</text>
@@ -827,29 +778,22 @@
     `;
   }
 
-  function rollingAverage(values, window) {
-    if (!values || values.length === 0) return [];
-    const w = Math.max(1, window | 0);
-    const out = [];
-    for (let i = 0; i < values.length; i++) {
-      const start = Math.max(0, i - (w - 1));
-      const slice = values.slice(start, i + 1);
-      const avg = slice.reduce((a, b) => a + b, 0) / slice.length;
-      out.push(avg);
-    }
-    return out;
-  }
-
-  function sparkHostForKey(key) {
+  function sparkTargets() {
     const root = document.getElementById("player-sparklines");
     if (!root) return null;
-    return root.querySelector(`[data-spark-host="${key}"]`);
+
+    const cards = Array.from(root.children || []);
+    if (!cards.length) return null;
+
+    return cards.map((card) => {
+      const blocks = card.querySelectorAll("div");
+      const sparkHost = blocks && blocks.length ? blocks[blocks.length - 1] : null;
+      return sparkHost;
+    });
   }
 
   async function renderChartsForCurrentPlayer() {
-    ensureChartRail();
-
-    const main = document.getElementById("player-main-chart");
+    const { sparklines, main } = getChartsEls();
     if (!currentPlayer || !currentPlayer.bdlId || !main) {
       renderChartPlaceholders();
       return;
@@ -866,41 +810,50 @@
     const sliced = rows.slice(0, Math.max(windowN, 5));
     const sparkRows = rows.slice(0, 12);
 
-    // Sparklines
     const sparkKeys = ["pts", "reb", "ast", "pra", "fg3m"];
-    sparkKeys.forEach((k) => {
-      const host = sparkHostForKey(k);
-      if (!host) return;
-      const vals = seriesForKey(sparkRows, k);
-      host.innerHTML = buildSparkSVG(vals, { height: 34, width: 160 });
-    });
+    const sparkHosts = sparkTargets();
 
-    // Main chart (make it wide so the single rail actually scrolls)
+    if (sparklines && sparkHosts && sparkHosts.length >= 5) {
+      sparkKeys.forEach((k, idx) => {
+        const vals = seriesForKey(sparkRows, k);
+        sparkHosts[idx].innerHTML = buildSparkSVG(vals, { height: 34, width: 160 });
+      });
+    }
+
     const mainVals = seriesForKey(sliced, primaryStatKey);
     const statLabel = statLabelFromKey(primaryStatKey);
     const tabLabel = currentTabLabelShort();
 
+    // Compute a “wide enough” SVG so horizontal scroll is meaningful
+    const rect = main.getBoundingClientRect ? main.getBoundingClientRect() : null;
+    const baseW = rect && rect.width ? Math.max(520, Math.floor(rect.width)) : 640;
     const pointsW = 28 * Math.max(10, mainVals.length);
-    const svgW = Math.max(760, pointsW);
+    const svgW = Math.max(baseW, pointsW);
 
+    // IMPORTANT: footer is OUTSIDE the scroll region to prevent the “cutoff/misalignment” you saw.
     main.innerHTML = `
-      <div style="width:${svgW}px; min-width:${svgW}px;">
-        <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:8px;">
-          <div style="font-size:.82rem; letter-spacing:.12em; text-transform:uppercase; opacity:.88;">
-            ${statLabel} · ${tabLabel} Trend
-          </div>
-          <div style="font-size:.72rem; opacity:.72; white-space:nowrap;">
-            Rolling avg overlay (v1)
-          </div>
+      <div class="pp-chart-head" style="display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:8px;">
+        <div style="font-size:.82rem; letter-spacing:.12em; text-transform:uppercase; opacity:.88;">
+          ${statLabel} · ${tabLabel} Trend
         </div>
-
-        ${buildMainChartSVG(mainVals, { width: svgW, height: 210 })}
-
-        <div style="margin-top:8px; font-size:.72rem; opacity:.72; line-height:1.35;">
-          Next upgrade: prop-line overlay + hit-rate shading + opponent context.
+        <div style="font-size:.72rem; opacity:.72; white-space:nowrap;">
+          Rolling avg overlay (v1)
         </div>
       </div>
+
+      <div id="player-main-scroll" class="pp-chart-scroll" style="overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch; scrollbar-gutter:stable;">
+        <div class="pp-chart-inner" style="width:${svgW}px; min-width:${svgW}px;">
+          ${buildMainChartSVG(mainVals, { width: svgW, height: 210 })}
+        </div>
+      </div>
+
+      <div class="pp-chart-foot" style="margin-top:8px; font-size:.72rem; opacity:.72; line-height:1.35;">
+        Next upgrade: prop-line overlay + hit-rate shading + opponent context.
+      </div>
     `;
+
+    // Re-bind wheel proxy (safe/no-op if already bound)
+    bindSparkWheelToMainChart();
   }
 
   // ---------------------------
