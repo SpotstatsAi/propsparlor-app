@@ -120,7 +120,6 @@
                 Daily NBA slate: matchups, tipoff times, and links to stats.
               </p>
 
-              <!-- Loading / error / empty states -->
               <p id="games-today-loading" class="panel-text">
                 Loading today&apos;s games…
               </p>
@@ -139,7 +138,6 @@
                 No NBA games scheduled for today.
               </p>
 
-              <!-- Table wrapper -->
               <div
                 id="games-today-wrapper"
                 class="games-table-wrapper"
@@ -175,7 +173,6 @@
               </p>
 
               <div class="players-layout">
-                <!-- LEFT: players list -->
                 <div class="players-list-shell">
                   <p class="panel-text" id="players-list-intro">
                     Demo key players will appear here after selecting a game.
@@ -185,7 +182,6 @@
                   </div>
                 </div>
 
-                <!-- RIGHT: player card -->
                 <div class="player-card-shell">
                   <div class="panel-header" style="margin-bottom: 6px;">
                     <span class="panel-title" id="player-card-title">No player selected</span>
@@ -219,7 +215,6 @@
                     </div>
                   </div>
 
-                  <!-- Charts -->
                   <div class="panel charts-shell">
                     <div class="panel-header" style="margin-bottom: 6px;">
                       <span class="panel-title">Charts</span>
@@ -230,11 +225,8 @@
                       This area will render trend charts for the selected stat (Season / L10 / L5), including rolling averages and distribution.
                     </p>
 
-                    <!-- NEW: shared scroll rail -->
                     <div class="chart-rail" id="player-chart-rail">
-                      <!-- scrolled content: sparklines + main chart -->
                       <div class="chart-rail-inner" id="player-chart-rail-inner">
-                        <!-- Mini sparklines row -->
                         <div id="player-sparklines" class="sparks-strip">
                           <div class="spark-card">
                             <span class="status-label">PTS Spark</span>
@@ -258,7 +250,6 @@
                           </div>
                         </div>
 
-                        <!-- Main chart viewport -->
                         <div id="player-main-chart" class="main-chart-viewport">
                           <div class="main-chart-placeholder">
                             <div class="main-chart-title">Main Trend Chart</div>
@@ -307,19 +298,70 @@
               <span class="panel-title">Pick Slip</span>
               <span class="panel-tag panel-tag-soft">Coming Soon</span>
             </div>
+
             <p class="panel-text">
               This will be your slip builder: selected props, odds, and
               parlay summary before sending to your sportsbook.
             </p>
+
+            <!-- THREAD 8: Parlay Summary (UI-only; driven by scripts/slip-summary-ui.js) -->
+            <div id="pp-slip-summary" class="pp-slip-summary">
+              <div class="pp-slip-summary-head">
+                <span class="pp-slip-summary-title">Parlay Summary</span>
+                <span class="pp-slip-summary-tag">Placeholder odds</span>
+              </div>
+
+              <div class="pp-slip-summary-grid">
+                <div class="pp-slip-summary-block">
+                  <div class="pp-slip-kicker">Legs</div>
+                  <div class="pp-slip-value" id="pp-slip-legs">0</div>
+                </div>
+
+                <div class="pp-slip-summary-block">
+                  <div class="pp-slip-kicker">Per-leg odds</div>
+                  <select id="pp-slip-perleg" class="pp-slip-select">
+                    <option value="-110">-110 (default)</option>
+                    <option value="-120">-120</option>
+                    <option value="-105">-105</option>
+                    <option value="+100">+100</option>
+                    <option value="+110">+110</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="pp-slip-controls">
+                <div class="pp-slip-field">
+                  <label class="pp-slip-label" for="pp-slip-stake">Stake</label>
+                  <input id="pp-slip-stake" class="pp-slip-input" type="number" min="1" step="1" value="10" />
+                </div>
+
+                <div class="pp-slip-return-row">
+                  <div class="pp-slip-return">
+                    <div class="pp-slip-kicker">Estimated return</div>
+                    <div class="pp-slip-money" id="pp-slip-return">$—</div>
+                  </div>
+                  <div class="pp-slip-return">
+                    <div class="pp-slip-kicker">Profit</div>
+                    <div class="pp-slip-money" id="pp-slip-profit">$—</div>
+                  </div>
+                </div>
+
+                <div class="pp-slip-helper" id="pp-slip-helper">
+                  Uses assumed odds per leg to estimate payout. Real lines will replace this later.
+                </div>
+
+                <button id="pp-slip-build" class="slip-button" type="button" disabled>
+                  Build Parlay (Coming Soon)
+                </button>
+              </div>
+            </div>
+
             <ul class="slip-list">
               <li class="slip-placeholder-row">
                 <span class="slip-placeholder-label">No picks added</span>
                 <span class="slip-placeholder-sub">Future: click a prop to send it here.</span>
               </li>
             </ul>
-            <button class="slip-button" disabled>
-              Build Parlay (Disabled · Thread 1)
-            </button>
           </div>
         </aside>
       </div>
@@ -333,6 +375,7 @@
 <script src="scripts/main.js"></script>
 <script src="scripts/games-today-ui.js"></script>
 <script src="scripts/slip.js"></script>
+<script src="scripts/slip-summary-ui.js"></script>
 <script src="scripts/players-ui.js"></script>
 </body>
 </html>
