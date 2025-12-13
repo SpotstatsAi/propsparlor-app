@@ -12,6 +12,9 @@
   const AVERAGES_API_URL = "/api/stats/averages";
   const GAMELOG_API_URL = "/api/stats/gamelog";
 
+  // NEW: roster endpoint (real players per matchup)
+  const ROSTER_API_URL = "/api/players/roster";
+
   const DEMO_PLAYERS = [
     { key: "demo-lebron",  name: "LeBron James",          team: "LAL", position: "F",   bdlId: 237 },
     { key: "demo-davis",   name: "Anthony Davis",         team: "LAL", position: "C/F", bdlId: 140 },
@@ -27,6 +30,9 @@
 
   const statsCache = Object.create(null);   // key: `${playerId}:${tab}`
   const gamelogCache = Object.create(null); // key: `${playerId}` -> array
+
+  // NEW: roster cache (front-end)
+  const rosterCache = Object.create(null); // key: `abbr:${LAL}` -> array
 
   function initPlayerViewPlaceholders() {
     const addSlipBtn = document.getElementById("player-add-slip");
@@ -353,7 +359,41 @@
     return { away, home };
   }
 
-  function renderDemoPlayers(gameLabel) {
+  async function fetchRosterByAbbr(abbr) {
+    const key = `abbr:${abbr}`;
+    if (rosterCache[key]) return rosterCache[key];
+
+    const url = `${ROSTER_API_URL}?abbr=${encodeURIComponent(abbr)}`;
+    const res = await fetch(url, { headers: { Accept: "application/json" } });
+    const payload = await res.json().catch(() => null);
+
+    if (!res.ok || !payload || payload.ok === false) {
+      console.error("Roster API error", abbr, res.status, payload);
+      return null;
+    }
+
+    const players = Array.isArray(payload.players) ? payload.players : [];
+    rosterCache[key] = players;
+    return players;
+  }
+
+  function normalizeRosterPlayer(p) {
+    const fullName = (p?.full_name || `${p?.first_name || ""} ${p?.last_name || ""}`.trim() || "").trim();
+    const teamAbbr =
+      (p?.team && (p.team.abbreviation || p.team.abbr || p.team.code)) ||
+      p?.team_abbr ||
+      null;
+
+    return {
+      key: `bdl-${p?.id}`,
+      name: fullName || "Unknown Player",
+      team: (teamAbbr || "").toUpperCase().slice(0, 3),
+      position: p?.position || "—",
+      bdlId: p?.id || null,
+    };
+  }
+
+  async function renderPlayersForMatchup(gameLabel) {
     const introEl = document.getElementById("players-list-intro");
     const gridEl = document.getElementById("players-list-grid");
     if (!gridEl) return;
@@ -361,6 +401,38 @@
     gridEl.innerHTML = "";
 
     const teams = extractTeamsFromLabel(gameLabel);
+
+    // Try real rosters first (if we can parse teams)
+    if (teams && teams.away && teams.home) {
+      if (introEl) {
+        introEl.textContent = `Loading real rosters for ${teams.away} and ${teams.home}…`;
+      }
+
+      try {
+        const [awayRoster, homeRoster] = await Promise.all([
+          fetchRosterByAbbr(teams.away),
+          fetchRosterByAbbr(teams.home),
+        ]);
+
+        const combined = []
+          .concat(Array.isArray(awayRoster) ? awayRoster : [])
+          .concat(Array.isArray(homeRoster) ? homeRoster : [])
+          .map(normalizeRosterPlayer)
+          .filter((p) => p && p.bdlId);
+
+        if (combined.length) {
+          if (introEl) {
+            introEl.textContent = `Players for ${teams.away} and ${teams.home} in ${gameLabel}.`;
+          }
+          combined.forEach((player) => appendPlayerPill(gridEl, player));
+          return;
+        }
+      } catch (err) {
+        console.error("Roster render failed; falling back to demo.", err);
+      }
+    }
+
+    // Demo fallback (your current behavior)
     let playersForMatchup = DEMO_PLAYERS;
 
     if (teams) {
@@ -373,37 +445,39 @@
     if (introEl) {
       introEl.textContent =
         teams
-          ? `Demo key players for ${teams.away} and ${teams.home} in ${gameLabel}. Later this will be driven by real rosters from BDL.`
-          : `Demo key players for ${gameLabel || "this matchup"}. Later this will be driven by real rosters from BDL.`;
+          ? `Demo key players for ${teams.away} and ${teams.home} in ${gameLabel}.`
+          : `Demo key players for ${gameLabel || "this matchup"}.`;
     }
 
-    playersForMatchup.forEach((player) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "player-pill";
-      btn.textContent = `${player.name} · ${player.team}`;
+    playersForMatchup.forEach((player) => appendPlayerPill(gridEl, player));
+  }
 
-      btn.addEventListener("click", async () => {
-        document.querySelectorAll(".player-pill").forEach((el) => {
-          if (!el.classList.contains("player-tab")) el.classList.remove("player-pill-active");
-        });
-        btn.classList.add("player-pill-active");
+  function appendPlayerPill(gridEl, player) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "player-pill";
+    btn.textContent = `${player.name} · ${player.team}`;
 
-        currentPlayer = player;
-
-        const titleEl = document.getElementById("player-card-title");
-        if (titleEl) titleEl.textContent = player.name;
-
-        ensureTabsInitialized();
-        wireStatRows();
-        updateTabActiveClasses();
-
-        renderChartLoadingState();
-        await renderTabStats(currentTab);
+    btn.addEventListener("click", async () => {
+      document.querySelectorAll(".player-pill").forEach((el) => {
+        if (!el.classList.contains("player-tab")) el.classList.remove("player-pill-active");
       });
+      btn.classList.add("player-pill-active");
 
-      gridEl.appendChild(btn);
+      currentPlayer = player;
+
+      const titleEl = document.getElementById("player-card-title");
+      if (titleEl) titleEl.textContent = player.name;
+
+      ensureTabsInitialized();
+      wireStatRows();
+      updateTabActiveClasses();
+
+      renderChartLoadingState();
+      await renderTabStats(currentTab);
     });
+
+    gridEl.appendChild(btn);
   }
 
   function currentTabLabelShort() {
@@ -552,7 +626,9 @@
     updateTabActiveClasses();
 
     renderChartPlaceholders();
-    renderDemoPlayers(gameLabel);
+
+    // UPDATED: now attempts roster pull, falls back to demo.
+    renderPlayersForMatchup(gameLabel);
   }
 
   // ---------------------------
