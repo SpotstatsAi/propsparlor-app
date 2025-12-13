@@ -551,6 +551,36 @@
     return values;
   }
 
+  // ---------------------------
+  // Thread 8 support:
+  // If averages fail but gamelog exists, allow Add to Slip and derive a line from gamelog.
+  // ---------------------------
+
+  function avg(nums) {
+    if (!nums || !nums.length) return null;
+    const s = nums.reduce((a, b) => a + b, 0);
+    return s / nums.length;
+  }
+
+  function hasGamelogForCurrentPlayer() {
+    if (!currentPlayer || !currentPlayer.bdlId) return false;
+    const rows = gamelogCache[String(currentPlayer.bdlId)];
+    return Array.isArray(rows) && rows.length >= 2;
+  }
+
+  function getLineFromGamelogForKey(statKey) {
+    if (!currentPlayer || !currentPlayer.bdlId) return null;
+
+    const rows = gamelogCache[String(currentPlayer.bdlId)];
+    if (!Array.isArray(rows) || rows.length < 2) return null;
+
+    const windowN = windowSizeForTab(currentTab);
+    const sliced = rows.slice(0, Math.max(windowN, 5)); // same as charts
+    const vals = seriesForKey(sliced, statKey);
+    const a = avg(vals);
+    return Number.isFinite(a) ? a : null;
+  }
+
   function syncAddSlipButtonDisabled() {
     const btn = document.getElementById("player-add-slip");
     if (!btn) return;
@@ -569,7 +599,8 @@
       stats.pra !== null ||
       stats.fg3m !== null;
 
-    if (!hasAnyNumeric) {
+    // If DOM averages are missing, but we DO have gamelog (charts path), allow slip.
+    if (!hasAnyNumeric && !hasGamelogForCurrentPlayer()) {
       btn.disabled = true;
       btn.textContent = "Add to Slip (Disabled · No Stats)";
       return;
@@ -586,7 +617,6 @@
     if (btn && btn.disabled) return;
 
     const stats = readStatsFromDom();
-
     const tabLabel = currentTabLabelShort();
 
     const statKeysInOrder = [primaryStatKey, "pra", "pts", "reb", "ast", "fg3m"]
@@ -594,19 +624,30 @@
 
     let chosenKey = null;
     let chosenValue = null;
+
+    // Prefer DOM averages; fallback to gamelog-derived line.
     for (const key of statKeysInOrder) {
-      if (stats[key] !== null && stats[key] !== undefined) {
+      const domVal = stats[key];
+      if (Number.isFinite(domVal)) {
         chosenKey = key;
-        chosenValue = stats[key];
+        chosenValue = domVal;
+        break;
+      }
+
+      const glVal = getLineFromGamelogForKey(key);
+      if (Number.isFinite(glVal)) {
+        chosenKey = key;
+        chosenValue = glVal;
         break;
       }
     }
+
     if (!chosenKey || !Number.isFinite(chosenValue)) return;
 
     const statLabel = statLabelFromKey(chosenKey);
 
     // Thread 8: internal pick representation (memory-only)
-    // Default side = OVER for now. Line = derived from current stat value.
+    // Default side = OVER for now. Line = derived from current stat value (DOM or gamelog).
     const pick = {
       player_id: currentPlayer.bdlId,
       player_name: currentPlayer.name,
@@ -627,7 +668,6 @@
     // Fallback: if slip store isn't loaded, do nothing (avoid desync hacks)
     console.error("Slip store not available. Ensure scripts/slip.js is loaded before players-ui.js.");
   }
-
 
   function openPlayersForGame(gameCtx) {
     switchToPlayersView();
@@ -902,6 +942,7 @@
     const rows = await fetchGamelog(currentPlayer.bdlId, limit);
     if (!rows || rows.length < 2) {
       main.innerHTML = `<div class="panel-text" style="opacity:.8;">No game log available yet.</div>`;
+      syncAddSlipButtonDisabled();
       return;
     }
 
@@ -950,6 +991,9 @@
     `;
 
     bindSparkWheelToMainChart();
+
+    // IMPORTANT: after gamelog is present, enable Add to Slip even if averages failed.
+    syncAddSlipButtonDisabled();
   }
 
   document.addEventListener("DOMContentLoaded", initPlayerViewPlaceholders);
