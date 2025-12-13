@@ -1,10 +1,13 @@
 // functions/api/players/roster.js
 //
-// Route: GET /api/players/roster?abbr=LAL
+// Route:
+//   GET /api/players/roster?team_id=14
+//   GET /api/players/roster?abbr=LAL
 //
-// Fetches NBA roster (players list) for a team abbreviation.
-// Internally resolves team abbreviation -> team_id using /nba/v1/teams.
-// Uses KV caching to avoid repeated BDL calls.
+// Fetches NBA roster (players list) for a team.
+// - If team_id is provided, it is used directly.
+// - Otherwise, abbr is resolved -> team_id via /nba/v1/teams (cached in KV).
+// Uses KV caching for rosters to reduce BDL calls.
 
 const BASE_URL = "https://api.balldontlie.io";
 
@@ -43,8 +46,7 @@ function normalizeAbbr(abbr) {
 }
 
 async function fetchTeamsMap({ env }) {
-  // Cache the teams list for 24h (teams do not change frequently).
-  const cacheKey = "nba:teams-map:v1";
+  const cacheKey = "nba:teams-map:nba-v1";
   const cached = await kvGet(env, cacheKey);
   if (cached) {
     try {
@@ -56,7 +58,6 @@ async function fetchTeamsMap({ env }) {
   }
 
   const url = new URL("/nba/v1/teams", BASE_URL);
-
   const res = await fetch(url.toString(), {
     method: "GET",
     headers: {
@@ -81,7 +82,6 @@ async function fetchTeamsMap({ env }) {
   const data = await res.json().catch(() => null);
   const rows = Array.isArray(data?.data) ? data.data : [];
 
-  // Map: "LAL" -> { id, abbreviation, full_name, city, name, conference, division }
   const map = {};
   for (const t of rows) {
     const abbr = normalizeAbbr(t?.abbreviation);
@@ -98,14 +98,11 @@ async function fetchTeamsMap({ env }) {
   }
 
   const payloadObj = { ok: true, map };
-  const payload = JSON.stringify(payloadObj, null, 2);
-  await kvPut(env, cacheKey, payload, 60 * 60 * 24); // 24h
-
+  await kvPut(env, cacheKey, JSON.stringify(payloadObj, null, 2), 60 * 60 * 24); // 24h
   return { ...payloadObj, cache_source: "live" };
 }
 
 async function fetchRosterByTeamId({ env, teamId }) {
-  // Cache rosters for 6 hours (cheap + safe).
   const cacheKey = `nba:roster:team:${teamId}`;
   const cached = await kvGet(env, cacheKey);
   if (cached) {
@@ -118,7 +115,6 @@ async function fetchRosterByTeamId({ env, teamId }) {
   }
 
   const url = new URL("/nba/v1/players", BASE_URL);
-  // Per BDL conventions, team filter is an array param.
   url.searchParams.append("team_ids[]", String(teamId));
   url.searchParams.set("per_page", "100");
 
@@ -155,55 +151,63 @@ async function fetchRosterByTeamId({ env, teamId }) {
     team: p?.team || null,
   }));
 
-  const payloadObj = { ok: true, team_id: Number(teamId), players: cleaned, meta: data?.meta || null };
-  const payload = JSON.stringify(payloadObj, null, 2);
-  await kvPut(env, cacheKey, payload, 60 * 60 * 6); // 6h
+  const payloadObj = {
+    ok: true,
+    team_id: Number(teamId),
+    players: cleaned,
+    meta: data?.meta || null,
+  };
 
+  await kvPut(env, cacheKey, JSON.stringify(payloadObj, null, 2), 60 * 60 * 6); // 6h
   return { ...payloadObj, cache_source: "live" };
 }
 
 export async function onRequest(context) {
   const { request, env } = context;
+  const url = new URL(request.url);
 
-  const abbrRaw = new URL(request.url).searchParams.get("abbr");
-  const abbr = normalizeAbbr(abbrRaw);
-
-  if (!abbr) {
-    return json(
-      { ok: false, error: { code: "BAD_REQUEST", message: "`abbr` is required (example: LAL)." } },
-      400
-    );
-  }
+  const teamIdRaw = url.searchParams.get("team_id");
+  const abbrRaw = url.searchParams.get("abbr");
 
   if (!env?.BDL_API_KEY) {
     return json({ ok: false, error: { code: "NO_API_KEY", message: "BDL_API_KEY is not configured." } }, 500);
   }
-
   if (!env?.PROPSPARLOR_BDL_CACHE) {
-    return json(
-      { ok: false, error: { code: "NO_KV", message: "PROPSPARLOR_BDL_CACHE is not configured." } },
-      500
-    );
+    return json({ ok: false, error: { code: "NO_KV", message: "PROPSPARLOR_BDL_CACHE is not configured." } }, 500);
   }
 
-  const teamsMap = await fetchTeamsMap({ env });
-  if (!teamsMap.ok) return json(teamsMap, 502);
+  let team = null;
+  let teamId = null;
 
-  const team = teamsMap.map?.[abbr] || null;
-  if (!team || !team.id) {
-    return json(
-      { ok: false, error: { code: "TEAM_NOT_FOUND", message: `No team found for abbr "${abbr}".` } },
-      404
-    );
+  if (teamIdRaw && /^\d+$/.test(teamIdRaw)) {
+    teamId = Number(teamIdRaw);
+    team = { id: teamId, abbreviation: null, full_name: null };
+  } else {
+    const abbr = normalizeAbbr(abbrRaw);
+    if (!abbr) {
+      return json(
+        { ok: false, error: { code: "BAD_REQUEST", message: "Provide `team_id` or `abbr` (example: /api/players/roster?abbr=LAL)." } },
+        400
+      );
+    }
+
+    const teamsMap = await fetchTeamsMap({ env });
+    if (!teamsMap.ok) return json(teamsMap, 502);
+
+    team = teamsMap.map?.[abbr] || null;
+    if (!team || !team.id) {
+      return json({ ok: false, error: { code: "TEAM_NOT_FOUND", message: `No team found for abbr "${abbr}".` } }, 404);
+    }
+    teamId = Number(team.id);
   }
 
-  const roster = await fetchRosterByTeamId({ env, teamId: team.id });
+  const roster = await fetchRosterByTeamId({ env, teamId });
   if (!roster.ok) return json(roster, 502);
 
   return json({
     ok: true,
-    abbr,
     team,
+    team_id: teamId,
     players: roster.players || [],
     meta: roster.meta || null,
     cache_source: roster.cache_source || "live",
